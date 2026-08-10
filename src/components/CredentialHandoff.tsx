@@ -105,8 +105,9 @@ export function CredentialHandoff({
           {dashboardUrl ? (
             <NoticeBox title="A dedicated dashboard was created for this share">
               This dashboard shows only the data included in this share -- not the general Dashboard app, which
-              would also show every other dashboard already public on this instance. Send the recipient this exact
-              link:
+              would also show every other dashboard already public on this instance. It also includes the
+              token-generation steps directly on the page, so the recipient has them even if this message doesn't
+              reach them. Send the recipient this exact link:
               <div style={{ marginTop: 8 }}>
                 <code style={{ background: '#f0f0f0', padding: '4px 8px', borderRadius: 4, fontSize: 12, wordBreak: 'break-all' }}>
                   {dashboardUrl}

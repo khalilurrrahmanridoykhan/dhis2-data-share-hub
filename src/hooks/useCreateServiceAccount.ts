@@ -155,7 +155,7 @@ async function createRecipientDashboard(
     const dashResponse = (await engine.mutate({
       resource: 'dashboards',
       type: 'create',
-      data: buildDashboardPayload(label, visualizationId),
+      data: buildDashboardPayload(label, visualizationId, baseUrl),
     })) as unknown as CreateResponse
     const dashboardId = dashResponse.response?.uid
     if (!dashboardId) return { dashboardId: null, dashboardUrl: null }

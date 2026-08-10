@@ -42,15 +42,39 @@ export function buildVisualizationPayload(label: string, dataElementIds: string[
   }
 }
 
-export interface DashboardPayload {
-  name: string
-  dashboardItems: { type: 'VISUALIZATION'; visualization: { id: string } }[]
+// Confirmed live: DHIS2 dashboards support a real TEXT item type
+// ({ type: 'TEXT', text: '...' }), so the token-generation instructions can
+// live directly on the recipient's own dashboard -- not just in the
+// one-time admin-facing handoff modal, which the recipient never sees if
+// the admin forgets to relay it.
+export function buildInstructionsText(baseUrl: string): string {
+  return [
+    'How to get your own API access:',
+    '1. Click your avatar (top right) -> Profile.',
+    '2. Change your password if you have not already.',
+    '3. Find "API tokens" and generate a new one.',
+    '4. Use that token in your own tools with an "Authorization: ApiToken <your token>" header -- not your login password.',
+    '',
+    `Log in at: ${baseUrl}`,
+  ].join('\n')
 }
 
-export function buildDashboardPayload(label: string, visualizationId: string): DashboardPayload {
+export type DashboardItemPayload =
+  | { type: 'VISUALIZATION'; visualization: { id: string } }
+  | { type: 'TEXT'; text: string }
+
+export interface DashboardPayload {
+  name: string
+  dashboardItems: DashboardItemPayload[]
+}
+
+export function buildDashboardPayload(label: string, visualizationId: string, baseUrl: string): DashboardPayload {
   return {
     name: `Data Share Hub: ${label}`.slice(0, 230),
-    dashboardItems: [{ type: 'VISUALIZATION', visualization: { id: visualizationId } }],
+    dashboardItems: [
+      { type: 'VISUALIZATION', visualization: { id: visualizationId } },
+      { type: 'TEXT', text: buildInstructionsText(baseUrl) },
+    ],
   }
 }
 

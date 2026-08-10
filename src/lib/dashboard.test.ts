@@ -1,4 +1,10 @@
-import { buildDashboardPayload, buildDashboardUrl, buildVisualizationPayload, DASHBOARD_READ_ACCESS } from './dashboard'
+import {
+  buildDashboardPayload,
+  buildDashboardUrl,
+  buildInstructionsText,
+  buildVisualizationPayload,
+  DASHBOARD_READ_ACCESS,
+} from './dashboard'
 
 describe('buildVisualizationPayload', () => {
   test('builds a pivot table with data elements on columns and org units as a filter', () => {
@@ -34,10 +40,21 @@ describe('buildVisualizationPayload', () => {
 })
 
 describe('buildDashboardPayload', () => {
-  test('wraps exactly one visualization item', () => {
-    const payload = buildDashboardPayload('Test share', 'vis1')
-    expect(payload.dashboardItems).toEqual([{ type: 'VISUALIZATION', visualization: { id: 'vis1' } }])
+  test('wraps the visualization plus a TEXT item with token instructions', () => {
+    const payload = buildDashboardPayload('Test share', 'vis1', 'https://example.org')
+    expect(payload.dashboardItems).toHaveLength(2)
+    expect(payload.dashboardItems[0]).toEqual({ type: 'VISUALIZATION', visualization: { id: 'vis1' } })
+    expect(payload.dashboardItems[1].type).toBe('TEXT')
     expect(payload.name).toBe('Data Share Hub: Test share')
+  })
+})
+
+describe('buildInstructionsText', () => {
+  test('includes the login URL and mentions API tokens, not the recipient password', () => {
+    const text = buildInstructionsText('https://example.org')
+    expect(text).toContain('https://example.org')
+    expect(text).toContain('API tokens')
+    expect(text).not.toContain('password:')
   })
 })
 
