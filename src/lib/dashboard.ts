@@ -13,23 +13,28 @@
 export interface VisualizationPayload {
   name: string
   type: 'PIVOT_TABLE'
-  rows: { dimension: string; items: never[] }[]
+  rows: { dimension: string; items: { id: string }[] }[]
   columns: { dimension: string; items: { id: string }[] }[]
   filters: { dimension: string; items: { id: string }[] }[]
   dataDimensionItems: { dataDimensionItemType: 'DATA_ELEMENT'; dataElement: { id: string } }[]
   relativePeriods: { last12Months: boolean }
 }
 
-// Confirmed live against play.dhis2.org: this exact shape (columns=dx,
-// filters=ou, rows=pe with relativePeriods) creates a working pivot table
-// whose data respects the viewing account's own org-unit/dataset access --
-// it doesn't grant any access itself, it only visualizes whatever the
-// service account (built in serviceAccount.ts) already has.
+// Confirmed live against play.dhis2.org, the hard way: the first version of
+// this only set the top-level `relativePeriods` field and left the `pe`
+// dimension's `items` empty, which produced a real, user-facing error on
+// the recipient's dashboard -- "A end date was not specified in periods,
+// dimensions, filters". The client resolves the actual date range from the
+// `pe` dimension's items, not from `relativePeriods` alone; the relative
+// period has to be present as an item there too (id: "LAST_12_MONTHS" is
+// DHIS2's standard relative-period identifier, valid anywhere a period item
+// is expected). `relativePeriods` is kept alongside it since some contexts
+// do read it, but it is not sufficient on its own.
 export function buildVisualizationPayload(label: string, dataElementIds: string[], orgUnitIds: string[]): VisualizationPayload {
   return {
     name: `Data Share Hub: ${label}`.slice(0, 230),
     type: 'PIVOT_TABLE',
-    rows: [{ dimension: 'pe', items: [] }],
+    rows: [{ dimension: 'pe', items: [{ id: 'LAST_12_MONTHS' }] }],
     columns: [{ dimension: 'dx', items: dataElementIds.map((id) => ({ id })) }],
     filters: [{ dimension: 'ou', items: orgUnitIds.map((id) => ({ id })) }],
     dataDimensionItems: dataElementIds.map((id) => ({ dataDimensionItemType: 'DATA_ELEMENT' as const, dataElement: { id } })),

@@ -13,6 +13,14 @@ describe('buildVisualizationPayload', () => {
     expect(payload.relativePeriods).toEqual({ last12Months: true })
   })
 
+  test('includes the relative period as an item on the pe dimension, not just relativePeriods', () => {
+    // Regression test: confirmed live that leaving `pe` items empty and
+    // relying on `relativePeriods` alone produces a real error on the
+    // recipient's dashboard ("A end date was not specified...").
+    const payload = buildVisualizationPayload('Malaria share', ['de1'], ['ou1'])
+    expect(payload.rows).toEqual([{ dimension: 'pe', items: [{ id: 'LAST_12_MONTHS' }] }])
+  })
+
   test('prefixes the name so it is identifiable as created by this app', () => {
     const payload = buildVisualizationPayload('Test share', ['de1'], ['ou1'])
     expect(payload.name).toBe('Data Share Hub: Test share')
