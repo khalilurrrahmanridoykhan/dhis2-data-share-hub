@@ -1,6 +1,6 @@
 {
   "name": "data-share-hub-app",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Define a data slice once, then export it as CSV or provision a scoped, revocable external API account for it -- with every share tracked in one registry, as a native DHIS2 App.",
   "license": "MIT",
   "private": true,

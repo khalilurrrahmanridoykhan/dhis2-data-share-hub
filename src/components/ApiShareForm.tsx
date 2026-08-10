@@ -2,6 +2,7 @@ import { Button, ButtonStrip, InputField, Modal, ModalActions, ModalContent, Mod
 import { useState } from 'react'
 import { useCreateServiceAccount } from '../hooks/useCreateServiceAccount'
 import type { DataSetDetail } from '../hooks/useDataSetDetail'
+import { isVisualizableValueType } from '../lib/dashboard'
 import type { DataSlice, ShareRecord } from '../types/share'
 import { CredentialHandoff } from './CredentialHandoff'
 import { SliceForm } from './SliceForm'
@@ -48,8 +49,18 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
     // A dashboard visualization needs a concrete data-element list either
     // way -- slice.dataElementIds is only empty to mean "all" for CSV/table
     // display purposes, so resolve the full dataset element list here when
-    // that's the case.
-    const dataElementIds = slice.dataElementIds.length > 0 ? slice.dataElementIds : (detail?.dataElements.map((de) => de.id) ?? [])
+    // that's the case. Then filter to genuinely visualizable value types --
+    // confirmed live that DHIS2 rejects a pivot table containing e.g.
+    // FILE_RESOURCE elements ("Data elements must be of a value and
+    // aggregation type that allow aggregation"), and that dataset's own
+    // aggregationType field is NOT a reliable signal for this (a real
+    // FILE_RESOURCE element reported aggregationType "SUM"). This only
+    // narrows what gets visualized -- it does not narrow what the recipient
+    // is granted read access to, which stays dataset-wide as designed.
+    const candidateIds = slice.dataElementIds.length > 0 ? slice.dataElementIds : (detail?.dataElements.map((de) => de.id) ?? [])
+    const dataElementIds = (detail?.dataElements ?? [])
+      .filter((de) => candidateIds.includes(de.id) && isVisualizableValueType(de.valueType))
+      .map((de) => de.id)
 
     const outcome = await createShare({
       label: label.trim(),

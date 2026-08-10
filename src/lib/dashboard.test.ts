@@ -4,7 +4,31 @@ import {
   buildInstructionsText,
   buildVisualizationPayload,
   DASHBOARD_READ_ACCESS,
+  isVisualizableValueType,
+  VISUALIZABLE_VALUE_TYPES,
 } from './dashboard'
+
+describe('isVisualizableValueType', () => {
+  test('accepts numeric value types', () => {
+    for (const valueType of VISUALIZABLE_VALUE_TYPES) {
+      expect(isVisualizableValueType(valueType)).toBe(true)
+    }
+  })
+
+  test('rejects FILE_RESOURCE -- the real type that broke a live pivot table', () => {
+    // Confirmed live: a real "Project Management" dataset's FILE_RESOURCE
+    // elements reported aggregationType "SUM" from the API despite being
+    // file uploads, so aggregationType alone can't be trusted -- this must
+    // filter on valueType.
+    expect(isVisualizableValueType('FILE_RESOURCE')).toBe(false)
+  })
+
+  test('rejects text and boolean types', () => {
+    expect(isVisualizableValueType('TEXT')).toBe(false)
+    expect(isVisualizableValueType('LONG_TEXT')).toBe(false)
+    expect(isVisualizableValueType('BOOLEAN')).toBe(false)
+  })
+})
 
 describe('buildVisualizationPayload', () => {
   test('builds a pivot table with data elements on columns and org units as a filter', () => {

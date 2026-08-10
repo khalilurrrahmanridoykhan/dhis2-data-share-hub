@@ -10,6 +10,27 @@
 // dedicated dashboard containing exactly the shared data, and share only
 // that one with the recipient.
 
+// Confirmed live, the hard way: a real "Project Management" dataset's
+// FILE_RESOURCE data elements report aggregationType "SUM" from the API
+// despite obviously not being aggregatable (they're file uploads) --
+// DHIS2's own error for this is explicit ("Data elements must be of a value
+// and aggregation type that allow aggregation"), and aggregationType alone
+// is not a reliable filter for it. valueType is: only these are safe to put
+// in a pivot table's dx dimension.
+export const VISUALIZABLE_VALUE_TYPES = [
+  'INTEGER',
+  'INTEGER_POSITIVE',
+  'INTEGER_ZERO_OR_POSITIVE',
+  'INTEGER_NEGATIVE',
+  'NUMBER',
+  'PERCENTAGE',
+  'UNIT_INTERVAL',
+] as const
+
+export function isVisualizableValueType(valueType: string): boolean {
+  return (VISUALIZABLE_VALUE_TYPES as readonly string[]).includes(valueType)
+}
+
 export interface VisualizationPayload {
   name: string
   type: 'PIVOT_TABLE'

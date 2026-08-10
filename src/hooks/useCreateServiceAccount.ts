@@ -143,6 +143,15 @@ async function createRecipientDashboard(
   orgUnitIds: string[],
   userId: string,
 ): Promise<{ dashboardId: string | null; dashboardUrl: string | null }> {
+  // Caller has already filtered to visualizable value types (see
+  // ApiShareForm.tsx) -- if that leaves nothing (e.g. a dataset made
+  // entirely of file uploads or text fields), don't attempt to create a
+  // pivot table with an empty dx dimension. Unlike a real API error, an
+  // empty dimension can succeed at creation time and only break when
+  // viewed, so this has to be checked up front rather than left to the
+  // try/catch below.
+  if (dataElementIds.length === 0) return { dashboardId: null, dashboardUrl: null }
+
   try {
     const visResponse = (await engine.mutate({
       resource: 'visualizations',
