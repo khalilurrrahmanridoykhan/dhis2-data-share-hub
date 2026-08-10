@@ -1,0 +1,152 @@
+import { useDataEngine } from '@dhis2/app-runtime'
+import { useCallback, useState } from 'react'
+import {
+  READ_ONLY_ACCESS,
+  addUserAccess,
+  buildServiceAccountPayload,
+  buildUserRolePayload,
+  generateServiceUsername,
+  generateTempPassword,
+  type SharingObject,
+} from '../lib/serviceAccount'
+import { SHARE_HUB_ROLE_NAME } from '../types/share'
+import { useShareHubSettings } from './useShareHubSettings'
+
+export type CredentialChoice = { method: 'invite_email'; email: string } | { method: 'temp_password' }
+
+export interface CreateServiceAccountParams {
+  label: string
+  orgUnitIds: string[]
+  dataSetId: string
+  credential: CredentialChoice
+}
+
+export interface CreateServiceAccountOutcome {
+  username: string
+  userId: string
+  roleId: string
+  tempPassword: string | null // only ever held in memory, never persisted
+}
+
+interface State {
+  creating: boolean
+  error: string | null
+}
+
+type Engine = ReturnType<typeof useDataEngine>
+
+interface RoleSearchResponse {
+  roles: { userRoles: { id: string }[] }
+}
+
+// engine.mutate() returns the raw API response body directly -- unlike
+// engine.query(), there is no alias-dictionary wrapper (mutate() operates on
+// exactly one resource, so there's nothing to key by). Confirmed live: a
+// real POST /api/userRoles response is
+// {"httpStatus":"Created",...,"response":{"uid":"...","klass":"...",...}}.
+interface CreateResponse {
+  response?: { uid?: string }
+}
+
+// Confirmed live against play.dhis2.org: GET /api/sharing?type=...&id=...
+// returns { meta: { allowPublicAccess }, object: { publicAccess,
+// userGroupAccesses, userAccesses, ... } } -- the sharing fields are nested
+// under `object`, not returned flat at the top level as first assumed.
+interface SharingGetResponse {
+  sharing: { object: SharingObject }
+}
+
+async function findOrCreateRole(engine: Engine, cachedRoleId: string | null): Promise<string> {
+  if (cachedRoleId) return cachedRoleId
+
+  const searchResponse = (await engine.query({
+    roles: {
+      resource: 'userRoles',
+      params: { filter: `name:eq:${SHARE_HUB_ROLE_NAME}`, fields: 'id' },
+    },
+  })) as unknown as RoleSearchResponse
+  const existing = searchResponse.roles.userRoles[0]
+  if (existing) return existing.id
+
+  // Confirmed live against play.dhis2.org: an empty `authorities: []` array
+  // is accepted when creating this role -- no substitution needed.
+  const createResponse = (await engine.mutate({
+    resource: 'userRoles',
+    type: 'create',
+    data: buildUserRolePayload(),
+  })) as unknown as CreateResponse
+  const roleId = createResponse.response?.uid
+  if (!roleId) throw new Error('Could not determine the created role id from the server response.')
+  return roleId
+}
+
+// Orchestrates the honest, partially-automated API-sharing flow (README
+// spells out the full rationale): creates a scoped read-only service
+// account and grants it read access to the dataset. Does NOT and cannot
+// mint that account's own API token -- DHIS2 personal access tokens are
+// self-service only, confirmed against DHIS2's own documentation. The
+// caller is responsible for showing the recipient/admin the one remaining
+// manual step.
+export function useCreateServiceAccount() {
+  const engine = useDataEngine()
+  const { minimalRoleId, setMinimalRoleId } = useShareHubSettings()
+  const [state, setState] = useState<State>({ creating: false, error: null })
+
+  const createShare = useCallback(
+    async (params: CreateServiceAccountParams): Promise<CreateServiceAccountOutcome | null> => {
+      setState({ creating: true, error: null })
+      try {
+        const roleId = await findOrCreateRole(engine, minimalRoleId)
+        if (roleId !== minimalRoleId) await setMinimalRoleId(roleId)
+
+        const username = generateServiceUsername(params.label)
+        const tempPassword = params.credential.method === 'temp_password' ? generateTempPassword() : null
+
+        const userPayload = buildServiceAccountPayload({
+          username,
+          label: params.label,
+          userRoleId: roleId,
+          orgUnitIds: params.orgUnitIds,
+          credential:
+            params.credential.method === 'invite_email'
+              ? { method: 'invite_email', email: params.credential.email }
+              : { method: 'temp_password', password: tempPassword! },
+        })
+
+        // Verify live: exact required-field list and validation-error shape
+        // vary by instance password policy -- surface any 400 verbatim.
+        const userCreateResponse = (await engine.mutate({
+          resource: 'users',
+          type: 'create',
+          data: userPayload,
+        })) as unknown as CreateResponse
+        const userId = userCreateResponse.response?.uid
+        if (!userId) throw new Error('Could not determine the created service account id from the server response.')
+
+        // Read-then-append: never blind-overwrite the dataset's existing
+        // sharing settings.
+        const sharingResponse = (await engine.query({
+          sharing: { resource: 'sharing', params: { type: 'dataSet', id: params.dataSetId } },
+        })) as unknown as SharingGetResponse
+        const nextSharing = addUserAccess(sharingResponse.sharing.object, userId, READ_ONLY_ACCESS)
+
+        // Request-body wrapper shape ({ object: ... }) confirmed live.
+        await engine.mutate({
+          resource: 'sharing',
+          type: 'create',
+          params: { type: 'dataSet', id: params.dataSetId },
+          data: { object: nextSharing },
+        })
+
+        setState({ creating: false, error: null })
+        return { username, userId, roleId, tempPassword }
+      } catch (error) {
+        setState({ creating: false, error: error instanceof Error ? error.message : String(error) })
+        return null
+      }
+    },
+    [engine, minimalRoleId, setMinimalRoleId],
+  )
+
+  return { ...state, createShare }
+}
