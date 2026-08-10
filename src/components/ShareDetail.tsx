@@ -109,9 +109,9 @@ export function ShareDetail({
             its token from Profile → API tokens.
           </p>
           <p>
-            Confirmed live: this account may not be able to open Data Share Hub itself from DHIS2's own menu, even
-            though its login and data access both work correctly. It can always reach the login page and its own
-            Profile, which is all it needs -- don't rely on it opening this app. If you didn't already send full
+            This account can browse the data in DHIS2's own Dashboard and Data Visualizer apps, but confirmed live it
+            can't open Data Share Hub itself from DHIS2's own menu (a platform limitation, not fixable here). It can
+            always reach the login page, Profile, Dashboard, and Data Visualizer. If you didn't already send full
             instructions when this share was created, you'll need to relay the login and steps to them directly.
           </p>
           {canManage && (

@@ -8,19 +8,19 @@ import type { DataSlice } from '../types/share'
 // component's local state is the only place it ever existed on this side.
 //
 // This is also the ONLY reliable place this information reaches anyone:
-// confirmed live that a zero-authority service account like this one cannot
-// actually open Data Share Hub itself from DHIS2's own app menu, even
-// though the account, its data access, and the app's URL all work
-// correctly. DHIS2's app-menu visibility check for custom (non-core) apps
-// declaring "no restriction" still appears to require the requesting
-// account to already have some app-specific authority -- confirmed by
-// testing three different authorities live, only an app's own exact
-// authority unlocked visibility for that one app, and no authority was
-// found that unlocks a custom app whose manifest declares none required.
-// Rather than keep guessing at undocumented platform behavior, this modal
-// is written to be self-sufficient: everything the recipient needs is here,
-// so the admin can hand it off directly (email, chat, however) without
-// depending on the recipient ever successfully opening this app.
+// confirmed live that a zero-authority service account cannot open Data
+// Share Hub itself from DHIS2's own app menu, even though the account, its
+// data access, and the app's URL all work correctly. The shared role now
+// grants Dashboard + Data Visualizer visibility instead (see
+// lib/serviceAccount.ts's buildUserRolePayload) so the recipient can
+// actually browse their shared data using DHIS2's own native tools after
+// logging in -- but Data Share Hub itself stays unreachable to them (the
+// only authority that unlocks custom-app visibility at all is
+// M_dhis-web-app-management, which is far too broad to grant a read-only
+// recipient). So this modal is written to be self-sufficient regardless:
+// everything the recipient needs is here, so the admin can hand it off
+// directly (email, chat, however) without depending on them ever opening
+// this app.
 export function CredentialHandoff({
   username,
   password,
@@ -55,7 +55,9 @@ export function CredentialHandoff({
     'Example request for exactly the data shared with you:',
     exampleUrl,
     '',
-    'Note: this account may not show up in the DHIS2 app menu/search -- that is expected. Steps 1-4 above use only the login page and your own Profile, which will work.',
+    'To browse the data visually instead: after logging in, open the Dashboard or Data Visualizer app from the DHIS2 menu -- both are enabled for this account.',
+    '',
+    'Note: this account will not show up in the DHIS2 app menu/search for Data Share Hub itself -- that is expected. It only needs the login page, Profile, Dashboard, and Data Visualizer, all of which work.',
   ].join('\n')
 
   async function handleCopyPassword() {
@@ -97,12 +99,12 @@ export function CredentialHandoff({
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <NoticeBox title="This account may not appear in the DHIS2 app menu -- that's expected">
-            Confirmed live: a newly-created, minimal-permission account like this one can authenticate and its data
-            access works correctly, but it may not be able to open custom apps (including Data Share Hub itself)
-            from DHIS2's own menu or search. It CAN always reach the login page and its own Profile, which is all it
-            needs to generate a token. Don't rely on the recipient being able to open Data Share Hub -- use the copy
-            button below to send them everything directly instead.
+          <NoticeBox title="This account can browse the data in Dashboard / Data Visualizer, but not open Data Share Hub itself">
+            Confirmed live: a truly zero-authority account can't open ANY custom app in DHIS2 (a platform limitation,
+            not something fixable from this app's side) -- so this account is instead given access to DHIS2's own
+            native Dashboard and Data Visualizer apps, which is enough to explore the shared data visually. It also
+            always has the login page and its own Profile, which is all it needs to generate a token. Use the copy
+            button below to send the recipient everything they need directly.
           </NoticeBox>
           <div style={{ marginTop: 8 }}>
             <Button onClick={handleCopyAll}>{copiedAll ? 'Copied full instructions' : 'Copy full instructions to send'}</Button>

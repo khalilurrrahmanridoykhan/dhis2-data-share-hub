@@ -36,7 +36,11 @@ interface State {
 type Engine = ReturnType<typeof useDataEngine>
 
 interface RoleSearchResponse {
-  roles: { userRoles: { id: string }[] }
+  roles: { userRoles: { id: string; authorities: string[] }[] }
+}
+
+interface RoleGetResponse {
+  role: { id: string; authorities: string[] }
 }
 
 // engine.mutate() returns the raw API response body directly -- unlike
@@ -56,20 +60,54 @@ interface SharingGetResponse {
   sharing: { object: SharingObject }
 }
 
+function sameAuthorities(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const setB = new Set(b)
+  return a.every((x) => setB.has(x))
+}
+
+// Keeps an already-existing role's authorities in sync with
+// buildUserRolePayload() rather than trusting whatever it happened to have
+// when first created. This matters in practice: this app originally shipped
+// the shared role with an empty authorities array, then added Dashboard/
+// Data Visualizer visibility after discovering that a zero-authority account
+// can't open ANY custom app (including this one) from DHIS2's own menu --
+// without this sync, a role created before that change would silently keep
+// its stale, more-restrictive authorities forever, since it's found by
+// name/cached id and never otherwise re-examined.
+async function ensureRoleAuthorities(engine: Engine, roleId: string, currentAuthorities: string[]): Promise<void> {
+  const desired = buildUserRolePayload().authorities
+  if (sameAuthorities(currentAuthorities, desired)) return
+  await engine.mutate({
+    resource: 'userRoles',
+    id: roleId,
+    type: 'update',
+    partial: true,
+    data: { authorities: desired },
+  })
+}
+
 async function findOrCreateRole(engine: Engine, cachedRoleId: string | null): Promise<string> {
-  if (cachedRoleId) return cachedRoleId
+  if (cachedRoleId) {
+    const roleResponse = (await engine.query({
+      role: { resource: `userRoles/${cachedRoleId}`, params: { fields: 'id,authorities' } },
+    })) as unknown as RoleGetResponse
+    await ensureRoleAuthorities(engine, cachedRoleId, roleResponse.role.authorities)
+    return cachedRoleId
+  }
 
   const searchResponse = (await engine.query({
     roles: {
       resource: 'userRoles',
-      params: { filter: `name:eq:${SHARE_HUB_ROLE_NAME}`, fields: 'id' },
+      params: { filter: `name:eq:${SHARE_HUB_ROLE_NAME}`, fields: 'id,authorities' },
     },
   })) as unknown as RoleSearchResponse
   const existing = searchResponse.roles.userRoles[0]
-  if (existing) return existing.id
+  if (existing) {
+    await ensureRoleAuthorities(engine, existing.id, existing.authorities)
+    return existing.id
+  }
 
-  // Confirmed live against play.dhis2.org: an empty `authorities: []` array
-  // is accepted when creating this role -- no substitution needed.
   const createResponse = (await engine.mutate({
     resource: 'userRoles',
     type: 'create',

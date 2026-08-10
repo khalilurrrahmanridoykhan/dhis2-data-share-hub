@@ -8,13 +8,27 @@ export interface UserRolePayload {
   authorities: string[]
 }
 
-// Flag for implementation-time verification (see README): whether DHIS2
-// accepts an empty authorities array on a userRole, or requires at least
-// one, is unconfirmed -- if rejected, the live-verification pass substitutes
-// the smallest available read-only authority and that substitution gets
-// documented inline here, not guessed silently in advance.
+// M_dhis-web-dashboard / M_dhis-web-data-visualizer grant visibility into
+// exactly those two DHIS2-native, read-only apps -- confirmed live that
+// each individually unlocks only that one app in DHIS2's own menu, nothing
+// more. (M_dhis-web-pivot was tried first and does nothing on modern DHIS2
+// -- the standalone Pivot Table app was merged into Data Visualizer, which
+// includes a pivot-table view mode; M_dhis-web-data-visualizer is its real
+// authority, confirmed live.)
+//
+// This exists because of a real, confirmed DHIS2 platform limitation: a
+// role with zero authorities can authenticate and its data access works
+// correctly, but DHIS2's own app menu excludes ALL custom (non-core) apps
+// for such an account -- including Data Share Hub itself -- even though
+// this app declares no restriction. The only authority found that unlocks
+// custom-app visibility at all is M_dhis-web-app-management, which is
+// nowhere near appropriate here (it grants install/manage/uninstall over
+// every app on the instance). So instead of leaving the recipient with no
+// way to see their data inside DHIS2 at all, this grants access to DHIS2's
+// own polished, native data-viewing tools -- not a workaround for opening
+// this app, a legitimately better outcome than a hand-built table anyway.
 export function buildUserRolePayload(): UserRolePayload {
-  return { name: SHARE_HUB_ROLE_NAME, authorities: [] }
+  return { name: SHARE_HUB_ROLE_NAME, authorities: ['M_dhis-web-dashboard', 'M_dhis-web-data-visualizer'] }
 }
 
 // e.g. "share.malaria-donor-report.a1b2c3" -- readable, unique enough to
