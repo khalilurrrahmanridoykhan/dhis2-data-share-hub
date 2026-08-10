@@ -108,6 +108,12 @@ export function ShareDetail({
             account. To finish this share, log in once as <strong>{share.serviceAccountUsername}</strong> and generate
             its token from Profile → API tokens.
           </p>
+          <p>
+            Confirmed live: this account may not be able to open Data Share Hub itself from DHIS2's own menu, even
+            though its login and data access both work correctly. It can always reach the login page and its own
+            Profile, which is all it needs -- don't rely on it opening this app. If you didn't already send full
+            instructions when this share was created, you'll need to relay the login and steps to them directly.
+          </p>
           {canManage && (
             <Button small onClick={onMarkActive}>
               I've done this -- mark Active

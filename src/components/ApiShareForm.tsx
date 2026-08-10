@@ -89,8 +89,8 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
     }
   }
 
-  if (handoff) {
-    return <CredentialHandoff username={handoff.username} password={handoff.password} onDone={onClose} />
+  if (handoff && slice) {
+    return <CredentialHandoff username={handoff.username} password={handoff.password} slice={slice} onDone={onClose} />
   }
 
   return (
