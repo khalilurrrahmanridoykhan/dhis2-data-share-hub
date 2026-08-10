@@ -25,6 +25,12 @@ Two independent sharing methods:
 
 **Why capture org units, not just data-view:** confirmed live against a real DHIS2 instance that `GET /api/dataValueSets` rejects a read with *"User is not allowed to view org unit(s)"* when the org unit is only in `dataViewOrganisationUnits` -- that field alone isn't enough even for a pure read. Also confirmed live that this is still safe: the shared "Data Share Hub - Read Only" role has an empty `authorities` array, so a data-value write attempt from an account like this still returns `403`, regardless of its capture org units.
 
+**Access scope is dataset-level, not data-element-level.** The "data elements to include" picker only filters what appears in a CSV export or the recipient's data table -- DHIS2's Sharing API grants access at the whole-dataset level, so a service account can technically read *any* data element in the shared dataset for its granted org units, not just the ones originally selected. Don't rely on the data-element picker as a real access restriction for API shares.
+
+## What the recipient sees
+
+When whoever logs in with the temporary credential opens this app, they do **not** see the admin's share registry (which would leak other recipients' labels and notes). The app detects that their username matches a `ShareRecord.serviceAccountUsername` and shows them a dedicated, read-only page instead: what dataset/org units/date range they have access to, a live data table (fetched using their own limited session -- doubling as a working proof their access is active), and step-by-step instructions plus a copy-pasteable example API URL for generating and using their own personal access token. They cannot manage any shares regardless of what they see, since their role has no authorities.
+
 ## Category option combos are NOT summed here
 
 Unlike Data Quality Auditor's `useAuditDataTrust.ts`, CSV export does **not** sum values across category option combinations. That summing is correct there because it feeds quality-check arithmetic; here it would corrupt the fidelity of a raw export handed to a third party. Every category option combo is its own row.

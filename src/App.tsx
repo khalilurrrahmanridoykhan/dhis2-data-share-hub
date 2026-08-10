@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ApiShareForm } from './components/ApiShareForm'
 import { EmptyState } from './components/EmptyState'
 import { ExportCsvButton } from './components/ExportCsvButton'
+import { RecipientView } from './components/RecipientView'
 import { ShareDetail } from './components/ShareDetail'
 import { ShareList } from './components/ShareList'
 import { useCurrentUserAuthorities } from './hooks/useCurrentUserAuthorities'
@@ -17,6 +18,14 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCsvForm, setShowCsvForm] = useState(false)
   const [showApiForm, setShowApiForm] = useState(false)
+
+  // If the logged-in account IS one of the service accounts this app
+  // created for a share, they see ONLY their own data -- never the full
+  // admin registry, which would otherwise leak other recipients' labels
+  // and notes to someone who isn't the admin.
+  const recipientShare = username
+    ? (shares.find((s) => s.method === 'api_account' && s.serviceAccountUsername === username) ?? null)
+    : null
 
   const selected = shares.find((s) => s.id === selectedId) ?? shares[0] ?? null
 
@@ -39,6 +48,15 @@ export default function App() {
     if (!window.confirm('Delete this share record? This only removes it from the registry -- it does not disable any account.')) return
     await deleteShare(selected.id)
     setSelectedId(null)
+  }
+
+  if (!loading && !error && recipientShare) {
+    return (
+      <>
+        <HeaderBar appName="Data Share Hub" />
+        <RecipientView share={recipientShare} />
+      </>
+    )
   }
 
   return (
