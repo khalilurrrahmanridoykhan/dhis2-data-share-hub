@@ -60,6 +60,8 @@ export function ExportCsvButton({ currentUsername, onClose, onSaveShare }: Props
       userRoleId: null,
       credentialDeliveryMethod: null,
       recipientEmail: null,
+      dashboardId: null,
+      dashboardUrl: null,
       status: 'active',
       createdAt: todayIso(),
       createdBy: currentUsername,

@@ -93,6 +93,18 @@ export function ShareDetail({
                         : 'Not specified'
                   }
                 />
+                <SummaryRow
+                  label="Recipient's dashboard"
+                  value={
+                    share.dashboardUrl ? (
+                      <a href={share.dashboardUrl} target="_blank" rel="noreferrer">
+                        Open link
+                      </a>
+                    ) : (
+                      'Not created'
+                    )
+                  }
+                />
               </>
             )}
             <SummaryRow label="Created" value={`${share.createdAt.slice(0, 10)} by ${share.createdBy}`} />

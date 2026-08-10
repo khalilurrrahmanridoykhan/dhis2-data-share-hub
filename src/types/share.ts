@@ -53,6 +53,13 @@ export interface ShareRecord {
   credentialDeliveryMethod: CredentialDeliveryMethod | null
   recipientEmail: string | null
 
+  // A dedicated, private pivot-table dashboard containing exactly this
+  // share's data, shared only with the recipient's service account -- see
+  // lib/dashboard.ts. null if dashboard creation failed or wasn't
+  // attempted; the share itself doesn't depend on this succeeding.
+  dashboardId: string | null
+  dashboardUrl: string | null
+
   status: ShareStatus
   createdAt: string
   createdBy: string

@@ -20,13 +20,13 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
   const [label, setLabel] = useState('')
   const [recipientNote, setRecipientNote] = useState('')
   const [slice, setSlice] = useState<DataSlice | null>(null)
-  const [, setDetail] = useState<DataSetDetail | null>(null)
+  const [detail, setDetail] = useState<DataSetDetail | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [deliveryMethod, setDeliveryMethod] = useState<'invite_email' | 'temp_password'>('temp_password')
   const [recipientEmail, setRecipientEmail] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
-  const [handoff, setHandoff] = useState<{ username: string; password: string } | null>(null)
+  const [handoff, setHandoff] = useState<{ username: string; password: string; dashboardUrl: string | null } | null>(null)
 
   const { creating, createShare } = useCreateServiceAccount()
 
@@ -45,10 +45,17 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
     }
     setFormError(null)
 
+    // A dashboard visualization needs a concrete data-element list either
+    // way -- slice.dataElementIds is only empty to mean "all" for CSV/table
+    // display purposes, so resolve the full dataset element list here when
+    // that's the case.
+    const dataElementIds = slice.dataElementIds.length > 0 ? slice.dataElementIds : (detail?.dataElements.map((de) => de.id) ?? [])
+
     const outcome = await createShare({
       label: label.trim(),
       orgUnitIds: slice.orgUnitIds,
       dataSetId: slice.dataSetId,
+      dataElementIds,
       credential:
         deliveryMethod === 'invite_email' ? { method: 'invite_email', email: recipientEmail.trim() } : { method: 'temp_password' },
     })
@@ -68,6 +75,8 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
       userRoleId: outcome.roleId,
       credentialDeliveryMethod: deliveryMethod,
       recipientEmail: deliveryMethod === 'invite_email' ? recipientEmail.trim() : null,
+      dashboardId: outcome.dashboardId,
+      dashboardUrl: outcome.dashboardUrl,
       status: 'account_created',
       createdAt: todayIso(),
       createdBy: currentUsername,
@@ -83,14 +92,22 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
     }
 
     if (deliveryMethod === 'temp_password' && outcome.tempPassword) {
-      setHandoff({ username: outcome.username, password: outcome.tempPassword })
+      setHandoff({ username: outcome.username, password: outcome.tempPassword, dashboardUrl: outcome.dashboardUrl })
     } else {
       onClose()
     }
   }
 
   if (handoff && slice) {
-    return <CredentialHandoff username={handoff.username} password={handoff.password} slice={slice} onDone={onClose} />
+    return (
+      <CredentialHandoff
+        username={handoff.username}
+        password={handoff.password}
+        slice={slice}
+        dashboardUrl={handoff.dashboardUrl}
+        onDone={onClose}
+      />
+    )
   }
 
   return (

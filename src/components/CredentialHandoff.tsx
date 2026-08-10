@@ -10,26 +10,25 @@ import type { DataSlice } from '../types/share'
 // This is also the ONLY reliable place this information reaches anyone:
 // confirmed live that a zero-authority service account cannot open Data
 // Share Hub itself from DHIS2's own app menu, even though the account, its
-// data access, and the app's URL all work correctly. The shared role now
-// grants Dashboard + Data Visualizer visibility instead (see
-// lib/serviceAccount.ts's buildUserRolePayload) so the recipient can
-// actually browse their shared data using DHIS2's own native tools after
-// logging in -- but Data Share Hub itself stays unreachable to them (the
-// only authority that unlocks custom-app visibility at all is
-// M_dhis-web-app-management, which is far too broad to grant a read-only
-// recipient). So this modal is written to be self-sufficient regardless:
-// everything the recipient needs is here, so the admin can hand it off
-// directly (email, chat, however) without depending on them ever opening
-// this app.
+// data access, and the app's URL all work correctly. The shared role also
+// grants Dashboard + Data Visualizer visibility (see
+// lib/serviceAccount.ts's buildUserRolePayload) -- but that alone would
+// only let the recipient open those general-purpose apps and see EVERY
+// dashboard already public on the instance, not just their own data. So
+// this app also builds a dedicated, private pivot-table dashboard scoped to
+// exactly this share (see lib/dashboard.ts) and shares only that one with
+// the recipient -- dashboardUrl is the direct link to it.
 export function CredentialHandoff({
   username,
   password,
   slice,
+  dashboardUrl,
   onDone,
 }: {
   username: string
   password: string
   slice: DataSlice
+  dashboardUrl: string | null
   onDone: () => void
 }) {
   const { baseUrl, apiVersion } = useConfig()
@@ -55,9 +54,13 @@ export function CredentialHandoff({
     'Example request for exactly the data shared with you:',
     exampleUrl,
     '',
-    'To browse the data visually instead: after logging in, open the Dashboard or Data Visualizer app from the DHIS2 menu -- both are enabled for this account.',
-    '',
-    'Note: this account will not show up in the DHIS2 app menu/search for Data Share Hub itself -- that is expected. It only needs the login page, Profile, Dashboard, and Data Visualizer, all of which work.',
+    ...(dashboardUrl
+      ? [`To browse the data visually instead, open your dedicated dashboard (bookmark this): ${dashboardUrl}`, '']
+      : [
+          'To browse the data visually instead: after logging in, open the Dashboard or Data Visualizer app from the DHIS2 menu.',
+          '',
+        ]),
+    'Note: this account will not show up in the DHIS2 app menu/search for Data Share Hub itself -- that is expected. It only needs the login page, Profile, and the dashboard link above, all of which work.',
   ].join('\n')
 
   async function handleCopyPassword() {
@@ -99,13 +102,24 @@ export function CredentialHandoff({
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <NoticeBox title="This account can browse the data in Dashboard / Data Visualizer, but not open Data Share Hub itself">
-            Confirmed live: a truly zero-authority account can't open ANY custom app in DHIS2 (a platform limitation,
-            not something fixable from this app's side) -- so this account is instead given access to DHIS2's own
-            native Dashboard and Data Visualizer apps, which is enough to explore the shared data visually. It also
-            always has the login page and its own Profile, which is all it needs to generate a token. Use the copy
-            button below to send the recipient everything they need directly.
-          </NoticeBox>
+          {dashboardUrl ? (
+            <NoticeBox title="A dedicated dashboard was created for this share">
+              This dashboard shows only the data included in this share -- not the general Dashboard app, which
+              would also show every other dashboard already public on this instance. Send the recipient this exact
+              link:
+              <div style={{ marginTop: 8 }}>
+                <code style={{ background: '#f0f0f0', padding: '4px 8px', borderRadius: 4, fontSize: 12, wordBreak: 'break-all' }}>
+                  {dashboardUrl}
+                </code>
+              </div>
+            </NoticeBox>
+          ) : (
+            <NoticeBox warning title="Could not create a dedicated dashboard for this share">
+              The service account and its data access were created successfully, but building a personalized
+              dashboard failed. The recipient can still use the general Dashboard/Data Visualizer apps after logging
+              in, though those will also show other content already public on this instance.
+            </NoticeBox>
+          )}
           <div style={{ marginTop: 8 }}>
             <Button onClick={handleCopyAll}>{copiedAll ? 'Copied full instructions' : 'Copy full instructions to send'}</Button>
           </div>
