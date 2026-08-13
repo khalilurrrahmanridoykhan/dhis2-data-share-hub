@@ -1,4 +1,4 @@
-import { CircularLoader, HeaderBar, NoticeBox } from '@dhis2/ui'
+import { AlertBar, CircularLoader, HeaderBar, NoticeBox } from '@dhis2/ui'
 import { useState } from 'react'
 import { ApiShareForm } from './components/ApiShareForm'
 import { EmptyState } from './components/EmptyState'
@@ -7,6 +7,7 @@ import { RecipientView } from './components/RecipientView'
 import { ShareDetail } from './components/ShareDetail'
 import { ShareList } from './components/ShareList'
 import { useCurrentUserAuthorities } from './hooks/useCurrentUserAuthorities'
+import { useIsStandalone } from './hooks/useIsStandalone'
 import { useRevokeServiceAccount } from './hooks/useRevokeServiceAccount'
 import { useShares } from './hooks/useShares'
 
@@ -14,10 +15,12 @@ export default function App() {
   const { loading, error, shares, saveShare, deleteShare } = useShares()
   const { canManage, username } = useCurrentUserAuthorities()
   const { revoking, error: revokeError, revoke } = useRevokeServiceAccount()
+  const isStandalone = useIsStandalone()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCsvForm, setShowCsvForm] = useState(false)
   const [showApiForm, setShowApiForm] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // If the logged-in account IS one of the service accounts this app
   // created for a share, they see ONLY their own data -- never the full
@@ -34,26 +37,38 @@ export default function App() {
     if (!window.confirm(`Disable the service account "${selected.serviceAccountUsername}"? This cannot be undone.`)) return
     const ok = await revoke(selected.serviceAccountUserId)
     if (ok) {
-      await saveShare({ ...selected, status: 'revoked', revokedAt: new Date().toISOString(), revokedBy: username })
+      try {
+        await saveShare({ ...selected, status: 'revoked', revokedAt: new Date().toISOString(), revokedBy: username })
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err))
+      }
     }
   }
 
   async function handleMarkActive() {
     if (!selected) return
-    await saveShare({ ...selected, status: 'active' })
+    try {
+      await saveShare({ ...selected, status: 'active' })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   async function handleDelete() {
     if (!selected) return
     if (!window.confirm('Delete this share record? This only removes it from the registry -- it does not disable any account.')) return
-    await deleteShare(selected.id)
-    setSelectedId(null)
+    try {
+      await deleteShare(selected.id)
+      setSelectedId(null)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   if (!loading && !error && recipientShare) {
     return (
       <>
-        <HeaderBar appName="Data Share Hub" />
+        {isStandalone && <HeaderBar appName="Data Share Hub" />}
         <RecipientView share={recipientShare} />
       </>
     )
@@ -61,7 +76,12 @@ export default function App() {
 
   return (
     <>
-      <HeaderBar appName="Data Share Hub" />
+      {isStandalone && <HeaderBar appName="Data Share Hub" />}
+      {saveError && (
+        <AlertBar critical onHidden={() => setSaveError(null)}>
+          {`Could not save: ${saveError}`}
+        </AlertBar>
+      )}
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 48px)' }}>
         <aside style={{ width: 300, flexShrink: 0, borderRight: '1px solid #e0e0e0' }}>
           {!loading && !error && (
