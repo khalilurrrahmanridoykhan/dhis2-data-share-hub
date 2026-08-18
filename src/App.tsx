@@ -1,4 +1,4 @@
-import { AlertBar, CircularLoader, HeaderBar, NoticeBox } from '@dhis2/ui'
+import { AlertBar, CircularLoader, NoticeBox } from '@dhis2/ui'
 import { useState } from 'react'
 import { ApiShareForm } from './components/ApiShareForm'
 import { EmptyState } from './components/EmptyState'
@@ -7,7 +7,6 @@ import { RecipientView } from './components/RecipientView'
 import { ShareDetail } from './components/ShareDetail'
 import { ShareList } from './components/ShareList'
 import { useCurrentUserAuthorities } from './hooks/useCurrentUserAuthorities'
-import { useIsStandalone } from './hooks/useIsStandalone'
 import { useRevokeServiceAccount } from './hooks/useRevokeServiceAccount'
 import { useShares } from './hooks/useShares'
 
@@ -15,7 +14,6 @@ export default function App() {
   const { loading, error, shares, saveShare, deleteShare } = useShares()
   const { canManage, username } = useCurrentUserAuthorities()
   const { revoking, error: revokeError, revoke } = useRevokeServiceAccount()
-  const isStandalone = useIsStandalone()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCsvForm, setShowCsvForm] = useState(false)
@@ -66,17 +64,11 @@ export default function App() {
   }
 
   if (!loading && !error && recipientShare) {
-    return (
-      <>
-        {isStandalone && <HeaderBar appName="Data Share Hub" />}
-        <RecipientView share={recipientShare} />
-      </>
-    )
+    return <RecipientView share={recipientShare} />
   }
 
   return (
     <>
-      {isStandalone && <HeaderBar appName="Data Share Hub" />}
       {saveError && (
         <AlertBar critical onHidden={() => setSaveError(null)}>
           {`Could not save: ${saveError}`}

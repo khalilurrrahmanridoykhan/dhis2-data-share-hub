@@ -7,7 +7,6 @@ const config = {
     description:
         'Define a data slice once (dataset + data elements + org units + period range), then either export it as CSV immediately, or provision a scoped, revocable external API account for it -- with every share tracked in one registry.',
 
-    coreCompatibility: '>=2.40',
     minDHIS2Version: '2.40',
 
     entryPoints: {

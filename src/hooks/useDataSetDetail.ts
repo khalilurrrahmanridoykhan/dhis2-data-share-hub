@@ -10,6 +10,7 @@ export interface DataSetDataElement {
 export interface DataSetOrgUnit {
   id: string
   name: string
+  path: string
 }
 
 export interface DataSetDetail {
@@ -57,7 +58,7 @@ export function useDataSetDetail(dataSetId: string | null): State {
       result: {
         resource: `dataSets/${dataSetId}`,
         params: {
-          fields: 'id,name,periodType,dataSetElements[dataElement[id,name,valueType]],organisationUnits[id,name]',
+          fields: 'id,name,periodType,dataSetElements[dataElement[id,name,valueType]],organisationUnits[id,name,path]',
         },
       },
     }

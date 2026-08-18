@@ -1,7 +1,8 @@
-import { CheckboxField, InputField, MultiSelectField, MultiSelectOption, SimpleSingleSelectField } from '@dhis2/ui'
-import { useEffect, useState } from 'react'
+import { CheckboxField, InputField, MultiSelectField, MultiSelectOption, OrganisationUnitTree, SimpleSingleSelectField } from '@dhis2/ui'
+import { useEffect, useMemo, useState } from 'react'
 import { useDataSetDetail, type DataSetDetail } from '../hooks/useDataSetDetail'
 import { useDataSets } from '../hooks/useDataSets'
+import { useOrgUnitRoots } from '../hooks/useOrgUnitRoots'
 import { validateDataSlice } from '../lib/dataSlice'
 import type { DataSlice } from '../types/share'
 
@@ -30,17 +31,22 @@ export function SliceForm({
   const [dataSetName, setDataSetName] = useState('')
   const [allDataElements, setAllDataElements] = useState(true)
   const [dataElementIds, setDataElementIds] = useState<string[]>([])
-  const [orgUnitIds, setOrgUnitIds] = useState<string[]>([])
+  // OrganisationUnitTree selects by path ("id/id/id"), not a bare id array
+  // -- orgUnitIds is derived from it, same pattern as Data Quality
+  // Auditor's AuditForm.tsx.
+  const [orgUnitPaths, setOrgUnitPaths] = useState<string[]>([])
+  const orgUnitIds = useMemo(() => orgUnitPaths.map((p) => p.split('/').pop()!), [orgUnitPaths])
   const [startDate, setStartDate] = useState(defaultStartDate())
   const [endDate, setEndDate] = useState(todayIso())
 
   const { dataSets, loading: dataSetsLoading } = useDataSets(datasetSearchTerm)
   const { detail, loading: detailLoading } = useDataSetDetail(dataSetId)
+  const { roots: orgUnitRoots } = useOrgUnitRoots()
 
   useEffect(() => {
     setDataElementIds([])
     setAllDataElements(true)
-    setOrgUnitIds([])
+    setOrgUnitPaths([])
   }, [dataSetId])
 
   useEffect(() => {
@@ -61,8 +67,6 @@ export function SliceForm({
     onChange(validationError ? null : (slice as DataSlice), detail, validationError)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSetId, dataSetName, allDataElements, dataElementIds, orgUnitIds, startDate, endDate, detail])
-
-  const orgUnitOptions = detail?.organisationUnits ?? []
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -116,20 +120,16 @@ export function SliceForm({
             </MultiSelectField>
           )}
 
-          <MultiSelectField
-            label="Org units to include"
-            required
-            loading={detailLoading}
-            filterable
-            filterPlaceholder="Filter org units..."
-            noMatchText="No org units found."
-            selected={orgUnitIds}
-            onChange={({ selected }) => setOrgUnitIds(selected)}
-          >
-            {orgUnitOptions.map((ou) => (
-              <MultiSelectOption key={ou.id} label={ou.name} value={ou.id} />
-            ))}
-          </MultiSelectField>
+          <div>
+            <div style={{ marginBottom: 4, fontWeight: 500 }}>Org units to include *</div>
+            <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #dbe4ea', borderRadius: 4, padding: 8 }}>
+              <OrganisationUnitTree
+                roots={orgUnitRoots}
+                selected={orgUnitPaths}
+                onChange={(payload) => setOrgUnitPaths(payload.selected)}
+              />
+            </div>
+          </div>
 
           <div style={{ display: 'flex', gap: 16 }}>
             <InputField
