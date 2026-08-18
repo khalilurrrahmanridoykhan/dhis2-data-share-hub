@@ -2,7 +2,7 @@
 
 A native DHIS2 App that lets an admin define a data slice once (dataset + data elements + org units + a date range) and either **export it as CSV immediately**, or **provision a scoped, revocable external API account** for it -- with every share tracked in one registry.
 
-This is the third sibling app in this repo, alongside [OneHealth Data Trust](../dhis2-app) and [Data Quality Auditor](../dhis2-data-quality-auditor). It reuses the metadata-picker and dataStore patterns already proven in the Auditor and does not touch either sibling app.
+This is the third sibling app of [OneHealth Data Trust](https://github.com/khalilurrrahmanridoykhan/onehealth-platform/tree/main/dhis2-app) and [Data Quality Auditor](https://github.com/khalilurrrahmanridoykhan/dhis2-data-quality-auditor), originally developed alongside them in the same monorepo before being split into its own repository. It reuses the metadata-picker and dataStore patterns already proven in the Auditor and does not touch either sibling app.
 
 ## The problem this solves
 

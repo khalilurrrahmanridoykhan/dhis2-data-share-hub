@@ -1,10 +1,21 @@
 {
-  "name": "data-share-hub-app",
+  "name": "dhis2-data-share-hub",
   "version": "1.4.2",
   "description": "Define a data slice once, then export it as CSV or provision a scoped, revocable external API account for it -- with every share tracked in one registry, as a native DHIS2 App.",
   "license": "MIT",
-  "private": true,
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khalilurrrahmanridoykhan/dhis2-data-share-hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/khalilurrrahmanridoykhan/dhis2-data-share-hub/issues"
+  },
+  "homepage": "https://github.com/khalilurrrahmanridoykhan/dhis2-data-share-hub#readme",
   "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "d2-app-scripts build",
     "start": "d2-app-scripts start",
