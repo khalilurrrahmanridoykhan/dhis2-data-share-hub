@@ -2,6 +2,7 @@ import { Button, ButtonStrip, InputField, Modal, ModalActions, ModalContent, Mod
 import { useState } from 'react'
 import type { DataSetDetail } from '../hooks/useDataSetDetail'
 import { useCsvExport } from '../hooks/useCsvExport'
+import i18n from '../locales'
 import type { DataSlice, ShareRecord } from '../types/share'
 import { SliceForm } from './SliceForm'
 
@@ -31,11 +32,11 @@ export function ExportCsvButton({ currentUsername, onClose, onSaveShare }: Props
 
   async function handleExport() {
     if (!slice || !detail) {
-      setFormError(validationError ?? 'Complete the data slice above first.')
+      setFormError(validationError ?? i18n.t('Complete the data slice above first.'))
       return
     }
     if (!label.trim()) {
-      setFormError('Name is required.')
+      setFormError(i18n.t('Name is required.'))
       return
     }
     setFormError(null)
@@ -45,7 +46,7 @@ export function ExportCsvButton({ currentUsername, onClose, onSaveShare }: Props
 
     const result = await exportCsv(slice, dataElementNameById, orgUnitNameById)
     if (!result) {
-      setFormError('The export failed -- see below.')
+      setFormError(i18n.t('The export failed -- see below.'))
       return
     }
 
@@ -58,10 +59,12 @@ export function ExportCsvButton({ currentUsername, onClose, onSaveShare }: Props
       serviceAccountUsername: null,
       serviceAccountUserId: null,
       userRoleId: null,
+      accountOrigin: null,
       credentialDeliveryMethod: null,
       recipientEmail: null,
       dashboardId: null,
       dashboardUrl: null,
+      visualizationId: null,
       status: 'active',
       createdAt: todayIso(),
       createdBy: currentUsername,
@@ -79,28 +82,28 @@ export function ExportCsvButton({ currentUsername, onClose, onSaveShare }: Props
 
   return (
     <Modal onClose={onClose} large>
-      <ModalTitle>Export as CSV</ModalTitle>
+      <ModalTitle>{i18n.t('Export as CSV')}</ModalTitle>
       <ModalContent>
         {formError && (
           <div style={{ marginBottom: 16 }}>
-            <NoticeBox error title="Could not export">
+            <NoticeBox error title={i18n.t('Could not export')}>
               {formError}
             </NoticeBox>
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <InputField
-            label="Name"
+            label={i18n.t('Name')}
             required
             value={label}
             onChange={({ value }) => setLabel(value ?? '')}
-            placeholder="e.g. Malaria data for donor report, Jan-Jun"
+            placeholder={i18n.t('e.g. Malaria data for donor report, Jan-Jun')}
           />
           <InputField
-            label="Notes (optional)"
+            label={i18n.t('Notes (optional)')}
             value={recipientNote}
             onChange={({ value }) => setRecipientNote(value ?? '')}
-            placeholder="Who or what this export is for"
+            placeholder={i18n.t('Who or what this export is for')}
           />
           <SliceForm onChange={(s, d, err) => (setSlice(s), setDetail(d), setValidationError(err))} />
         </div>
@@ -108,10 +111,10 @@ export function ExportCsvButton({ currentUsername, onClose, onSaveShare }: Props
       <ModalActions>
         <ButtonStrip end>
           <Button onClick={onClose} disabled={exporting}>
-            Cancel
+            {i18n.t('Cancel')}
           </Button>
           <Button primary onClick={handleExport} loading={exporting} disabled={!slice}>
-            Download CSV
+            {i18n.t('Download CSV')}
           </Button>
         </ButtonStrip>
       </ModalActions>

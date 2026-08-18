@@ -1,7 +1,23 @@
-import { Button, ButtonStrip, InputField, Modal, ModalActions, ModalContent, ModalTitle, NoticeBox, Radio } from '@dhis2/ui'
+import {
+  Button,
+  ButtonStrip,
+  CircularLoader,
+  InputField,
+  Modal,
+  ModalActions,
+  ModalContent,
+  ModalTitle,
+  NoticeBox,
+  Radio,
+  SingleSelectField,
+  SingleSelectOption,
+} from '@dhis2/ui'
 import { useState } from 'react'
-import { useCreateServiceAccount } from '../hooks/useCreateServiceAccount'
+import { useCreateServiceAccount, type AccountChoice } from '../hooks/useCreateServiceAccount'
 import type { DataSetDetail } from '../hooks/useDataSetDetail'
+import { useServiceAccounts } from '../hooks/useServiceAccounts'
+import { useShareHubSettings } from '../hooks/useShareHubSettings'
+import i18n from '../locales'
 import { isVisualizableValueType } from '../lib/dashboard'
 import type { DataSlice, ShareRecord } from '../types/share'
 import { CredentialHandoff } from './CredentialHandoff'
@@ -13,35 +29,45 @@ function todayIso(): string {
 
 interface Props {
   currentUsername: string
+  shares: ShareRecord[]
   onClose: () => void
   onSaveShare: (share: ShareRecord) => Promise<void>
 }
 
-export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
+export function ApiShareForm({ currentUsername, shares, onClose, onSaveShare }: Props) {
   const [label, setLabel] = useState('')
   const [recipientNote, setRecipientNote] = useState('')
   const [slice, setSlice] = useState<DataSlice | null>(null)
   const [detail, setDetail] = useState<DataSetDetail | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [accountMode, setAccountMode] = useState<'create' | 'attach'>('create')
   const [deliveryMethod, setDeliveryMethod] = useState<'invite_email' | 'temp_password'>('temp_password')
   const [recipientEmail, setRecipientEmail] = useState('')
+  const [attachAccountId, setAttachAccountId] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
   const [handoff, setHandoff] = useState<{ username: string; password: string; dashboardUrl: string | null } | null>(null)
 
   const { creating, createShare } = useCreateServiceAccount()
+  const { minimalRoleId } = useShareHubSettings()
+  const { loading: accountsLoading, accounts } = useServiceAccounts(minimalRoleId, shares)
 
   async function handleCreate() {
     if (!slice) {
-      setFormError(validationError ?? 'Complete the data slice above first.')
+      setFormError(validationError ?? i18n.t('Complete the data slice above first.'))
       return
     }
     if (!label.trim()) {
-      setFormError('Name is required.')
+      setFormError(i18n.t('Name is required.'))
       return
     }
-    if (deliveryMethod === 'invite_email' && !recipientEmail.trim()) {
-      setFormError('Enter the recipient email for the invite.')
+    if (accountMode === 'create' && deliveryMethod === 'invite_email' && !recipientEmail.trim()) {
+      setFormError(i18n.t('Enter the recipient email for the invite.'))
+      return
+    }
+    const attachTarget = accountMode === 'attach' ? accounts.find((a) => a.id === attachAccountId) : null
+    if (accountMode === 'attach' && !attachTarget) {
+      setFormError(i18n.t('Select an existing service account to attach to.'))
       return
     }
     setFormError(null)
@@ -62,16 +88,24 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
       .filter((de) => candidateIds.includes(de.id) && isVisualizableValueType(de.valueType))
       .map((de) => de.id)
 
+    const account: AccountChoice =
+      accountMode === 'attach'
+        ? { mode: 'attach', userId: attachTarget!.id, username: attachTarget!.username }
+        : {
+            mode: 'create',
+            credential:
+              deliveryMethod === 'invite_email' ? { method: 'invite_email', email: recipientEmail.trim() } : { method: 'temp_password' },
+          }
+
     const outcome = await createShare({
       label: label.trim(),
       orgUnitIds: slice.orgUnitIds,
       dataSetId: slice.dataSetId,
       dataElementIds,
-      credential:
-        deliveryMethod === 'invite_email' ? { method: 'invite_email', email: recipientEmail.trim() } : { method: 'temp_password' },
+      account,
     })
     if (!outcome) {
-      setFormError('Could not create the service account -- see below.')
+      setFormError(i18n.t('Could not create the service account -- see below.'))
       return
     }
 
@@ -84,11 +118,15 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
       serviceAccountUsername: outcome.username,
       serviceAccountUserId: outcome.userId,
       userRoleId: outcome.roleId,
-      credentialDeliveryMethod: deliveryMethod,
-      recipientEmail: deliveryMethod === 'invite_email' ? recipientEmail.trim() : null,
+      accountOrigin: outcome.accountOrigin,
+      // No new credential is ever minted for the attach path -- the
+      // recipient already has their own login/token from an earlier share.
+      credentialDeliveryMethod: accountMode === 'attach' ? null : deliveryMethod,
+      recipientEmail: accountMode === 'create' && deliveryMethod === 'invite_email' ? recipientEmail.trim() : null,
       dashboardId: outcome.dashboardId,
       dashboardUrl: outcome.dashboardUrl,
-      status: 'account_created',
+      visualizationId: outcome.visualizationId,
+      status: accountMode === 'attach' ? 'active' : 'account_created',
       createdAt: todayIso(),
       createdBy: currentUsername,
       revokedAt: null,
@@ -123,74 +161,127 @@ export function ApiShareForm({ currentUsername, onClose, onSaveShare }: Props) {
 
   return (
     <Modal onClose={onClose} large>
-      <ModalTitle>Create API share</ModalTitle>
+      <ModalTitle>{i18n.t('Create API share')}</ModalTitle>
       <ModalContent>
         {formError && (
           <div style={{ marginBottom: 16 }}>
-            <NoticeBox error title="Could not create this share">
+            <NoticeBox error title={i18n.t('Could not create this share')}>
               {formError}
             </NoticeBox>
           </div>
         )}
 
         <div style={{ marginBottom: 16 }}>
-          <NoticeBox title="How this works">
-            This creates a new, read-only DHIS2 account scoped to the data below and grants it read access to the
-            dataset. DHIS2 API tokens are self-service only, so one manual step remains after this: whoever
-            administers the new account has to log in once to generate its token.
+          <NoticeBox title={i18n.t('How this works')}>
+            {accountMode === 'attach'
+              ? i18n.t(
+                  'This attaches the share below to the recipient’s existing service account. No new login or password is created — they’ll see this data the next time they use their existing token.',
+                )
+              : i18n.t(
+                  'This creates a new, read-only DHIS2 account scoped to the data below and grants it read access to the dataset. DHIS2 API tokens are self-service only, so one manual step remains after this -- whoever administers the new account has to log in once to generate its token.',
+                )}
           </NoticeBox>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <InputField
-            label="Name"
+            label={i18n.t('Name')}
             required
             value={label}
             onChange={({ value }) => setLabel(value ?? '')}
-            placeholder="e.g. Partner dashboard - Malaria data"
+            placeholder={i18n.t('e.g. Partner dashboard - Malaria data')}
           />
           <InputField
-            label="Notes (optional)"
+            label={i18n.t('Notes (optional)')}
             value={recipientNote}
             onChange={({ value }) => setRecipientNote(value ?? '')}
-            placeholder="Who or what this share is for"
+            placeholder={i18n.t('Who or what this share is for')}
           />
 
           <SliceForm onChange={(s, d, err) => (setSlice(s), setDetail(d), setValidationError(err))} />
 
           <div>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>Credential delivery</div>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>{i18n.t('Service account')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Radio
-                label="Email an invite (requires this instance's email/SMTP to be configured)"
-                checked={deliveryMethod === 'invite_email'}
-                onChange={() => setDeliveryMethod('invite_email')}
+                label={i18n.t('Create a new service account')}
+                checked={accountMode === 'create'}
+                onChange={() => setAccountMode('create')}
               />
               <Radio
-                label="Generate a one-time temporary password (shown once, not emailed)"
-                checked={deliveryMethod === 'temp_password'}
-                onChange={() => setDeliveryMethod('temp_password')}
+                label={i18n.t('Attach to an existing service account')}
+                checked={accountMode === 'attach'}
+                onChange={() => setAccountMode('attach')}
               />
             </div>
           </div>
 
-          {deliveryMethod === 'invite_email' && (
-            <InputField
-              label="Recipient email"
+          {accountMode === 'create' ? (
+            <>
+              <div>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>{i18n.t('Credential delivery')}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Radio
+                    label={i18n.t("Email an invite (requires this instance's email/SMTP to be configured)")}
+                    checked={deliveryMethod === 'invite_email'}
+                    onChange={() => setDeliveryMethod('invite_email')}
+                  />
+                  <Radio
+                    label={i18n.t('Generate a one-time temporary password (shown once, not emailed)')}
+                    checked={deliveryMethod === 'temp_password'}
+                    onChange={() => setDeliveryMethod('temp_password')}
+                  />
+                </div>
+              </div>
+
+              {deliveryMethod === 'invite_email' && (
+                <InputField
+                  label={i18n.t('Recipient email')}
+                  required
+                  value={recipientEmail}
+                  onChange={({ value }) => setRecipientEmail(value ?? '')}
+                />
+              )}
+            </>
+          ) : accountsLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+              <CircularLoader small />
+            </div>
+          ) : accounts.length === 0 ? (
+            <NoticeBox title={i18n.t('No existing service accounts yet')}>
+              {i18n.t(
+                'No Data Share Hub service account has been created on this instance yet -- switch to "Create a new service account" for this first share.',
+              )}
+            </NoticeBox>
+          ) : (
+            <SingleSelectField
+              label={i18n.t('Existing service account')}
               required
-              value={recipientEmail}
-              onChange={({ value }) => setRecipientEmail(value ?? '')}
-            />
+              selected={attachAccountId ?? ''}
+              onChange={({ selected }) => setAttachAccountId(selected)}
+            >
+              {accounts.map((a) => (
+                <SingleSelectOption
+                  key={a.id}
+                  value={a.id}
+                  label={
+                    a.activeShareCount > 0
+                      ? i18n.t('{{username}} — {{count}} other active share(s)', { username: a.username, count: a.activeShareCount })
+                      : i18n.t('{{username}} — not currently used by any other share', { username: a.username })
+                  }
+                />
+              ))}
+            </SingleSelectField>
           )}
         </div>
       </ModalContent>
       <ModalActions>
         <ButtonStrip end>
           <Button onClick={onClose} disabled={creating}>
-            Cancel
+            {i18n.t('Cancel')}
           </Button>
           <Button primary onClick={handleCreate} loading={creating} disabled={!slice}>
-            Create share
+            {i18n.t('Create share')}
           </Button>
         </ButtonStrip>
       </ModalActions>

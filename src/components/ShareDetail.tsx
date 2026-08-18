@@ -1,5 +1,6 @@
 import { Button, ButtonStrip, Card, NoticeBox } from '@dhis2/ui'
 import type { ReactNode } from 'react'
+import i18n from '../locales'
 import type { ShareRecord } from '../types/share'
 import { ShareStatusTag } from './StatusTag'
 
@@ -14,6 +15,7 @@ function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
 
 export function ShareDetail({
   share,
+  siblingCount,
   canManage,
   revoking,
   revokeError,
@@ -22,6 +24,12 @@ export function ShareDetail({
   onMarkActive,
 }: {
   share: ShareRecord
+  // How many OTHER active shares use the same service account right now --
+  // 0 for csv_export shares (siblingCount is meaningless there). Drives
+  // both the "Shared with" row below and the revoke button's caption, so
+  // an admin never mistakes a shared-account revoke for a full cutoff or
+  // vice versa.
+  siblingCount: number
   canManage: boolean
   revoking: boolean
   revokeError: string | null
@@ -37,23 +45,28 @@ export function ShareDetail({
         <div>
           <h2 style={{ margin: '0 0 4px' }}>{share.label}</h2>
           <p style={{ margin: 0, color: '#6e7a89' }}>
-            {slice.dataSetName} · {share.method === 'csv_export' ? 'CSV export' : 'API account'}
+            {slice.dataSetName} · {share.method === 'csv_export' ? i18n.t('CSV export') : i18n.t('API account')}
           </p>
         </div>
         <ButtonStrip>
           {share.method === 'api_account' && share.status !== 'revoked' && canManage && (
-            <Button small destructive onClick={onRevoke} loading={revoking}>
-              Revoke
-            </Button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+              <Button small destructive onClick={onRevoke} loading={revoking}>
+                {i18n.t('Revoke')}
+              </Button>
+              <span style={{ fontSize: 11, color: '#a0a7ae' }}>
+                {siblingCount > 0 ? i18n.t('Removes only this share’s access') : i18n.t('Also offers to disable the account')}
+              </span>
+            </div>
           )}
           <Button small onClick={onDelete}>
-            Delete record
+            {i18n.t('Delete record')}
           </Button>
         </ButtonStrip>
       </div>
 
       {revokeError && (
-        <NoticeBox error title="Could not revoke this share">
+        <NoticeBox error title={i18n.t('Could not revoke this share')}>
           {revokeError}
         </NoticeBox>
       )}
@@ -65,70 +78,89 @@ export function ShareDetail({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
         <Card>
           <div style={{ padding: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Data slice</h3>
-            <SummaryRow label="Dataset" value={slice.dataSetName} />
+            <h3 style={{ marginTop: 0 }}>{i18n.t('Data slice')}</h3>
+            <SummaryRow label={i18n.t('Dataset')} value={slice.dataSetName} />
             <SummaryRow
-              label="Data elements"
-              value={slice.dataElementNames.length === 0 ? 'All' : `${slice.dataElementNames.length} selected`}
+              label={i18n.t('Data elements')}
+              value={slice.dataElementNames.length === 0 ? i18n.t('All') : i18n.t('{{count}} selected', { count: slice.dataElementNames.length })}
             />
-            <SummaryRow label="Org units" value={slice.orgUnitNames.join(', ') || 'None'} />
-            <SummaryRow label="Date range" value={`${slice.startDate} – ${slice.endDate}`} />
+            <SummaryRow label={i18n.t('Org units')} value={slice.orgUnitNames.join(', ') || i18n.t('None')} />
+            <SummaryRow label={i18n.t('Date range')} value={`${slice.startDate} – ${slice.endDate}`} />
           </div>
         </Card>
 
         <Card>
           <div style={{ padding: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Sharing</h3>
-            <SummaryRow label="Recipient / notes" value={share.recipientNote ?? 'Not specified'} />
+            <h3 style={{ marginTop: 0 }}>{i18n.t('Sharing')}</h3>
+            <SummaryRow label={i18n.t('Recipient / notes')} value={share.recipientNote ?? i18n.t('Not specified')} />
             {share.method === 'api_account' && (
               <>
-                <SummaryRow label="Service account" value={share.serviceAccountUsername ?? 'Not specified'} />
+                <SummaryRow label={i18n.t('Service account')} value={share.serviceAccountUsername ?? i18n.t('Not specified')} />
                 <SummaryRow
-                  label="Credential delivery"
+                  label={i18n.t('Account usage')}
+                  value={share.accountOrigin === 'attached' ? i18n.t('Attached to an existing account') : i18n.t('Created for this share')}
+                />
+                <SummaryRow
+                  label={i18n.t('Shared with')}
                   value={
-                    share.credentialDeliveryMethod === 'invite_email'
-                      ? `Email invite to ${share.recipientEmail}`
-                      : share.credentialDeliveryMethod === 'temp_password'
-                        ? 'One-time temporary password (shown once at creation)'
-                        : 'Not specified'
+                    siblingCount > 0
+                      ? i18n.t('{{count}} other active share(s) use this account', { count: siblingCount })
+                      : share.status === 'revoked'
+                        ? i18n.t('N/A -- revoked')
+                        : i18n.t('This share is currently the only one using this account')
                   }
                 />
                 <SummaryRow
-                  label="Recipient's dashboard"
+                  label={i18n.t('Credential delivery')}
+                  value={
+                    share.credentialDeliveryMethod === 'invite_email'
+                      ? i18n.t('Email invite to {{email}}', { email: share.recipientEmail })
+                      : share.credentialDeliveryMethod === 'temp_password'
+                        ? i18n.t('One-time temporary password (shown once at creation)')
+                        : i18n.t('Not specified')
+                  }
+                />
+                <SummaryRow
+                  label={i18n.t("Recipient's dashboard")}
                   value={
                     share.dashboardUrl ? (
                       <a href={share.dashboardUrl} target="_blank" rel="noreferrer">
-                        Open link
+                        {i18n.t('Open link')}
                       </a>
                     ) : (
-                      'Not created'
+                      i18n.t('Not created')
                     )
                   }
                 />
               </>
             )}
-            <SummaryRow label="Created" value={`${share.createdAt.slice(0, 10)} by ${share.createdBy}`} />
-            {share.revokedAt && <SummaryRow label="Revoked" value={`${share.revokedAt.slice(0, 10)} by ${share.revokedBy}`} />}
+            <SummaryRow label={i18n.t('Created')} value={i18n.t('{{date}} by {{by}}', { date: share.createdAt.slice(0, 10), by: share.createdBy })} />
+            {share.revokedAt && (
+              <SummaryRow
+                label={i18n.t('Revoked')}
+                value={i18n.t('{{date}} by {{by}}', { date: share.revokedAt.slice(0, 10), by: share.revokedBy })}
+              />
+            )}
           </div>
         </Card>
       </div>
 
       {share.method === 'api_account' && share.status === 'account_created' && (
-        <NoticeBox warning title="One manual step left">
+        <NoticeBox warning title={i18n.t('One manual step left')}>
           <p style={{ marginTop: 0 }}>
-            DHIS2 personal access tokens are self-service only -- there is no API for creating one on behalf of another
-            account. To finish this share, log in once as <strong>{share.serviceAccountUsername}</strong> and generate
-            its token from Profile → API tokens.
+            {i18n.t(
+              'DHIS2 personal access tokens are self-service only -- there is no API for creating one on behalf of another account. To finish this share, log in once as',
+            )}{' '}
+            <strong>{share.serviceAccountUsername}</strong> {i18n.t('and generate its token from Profile → API tokens.')}
           </p>
           <p>
-            This account can browse the data in DHIS2's own Dashboard and Data Visualizer apps, but confirmed live it
-            can't open Data Share Hub itself from DHIS2's own menu (a platform limitation, not fixable here). It can
-            always reach the login page, Profile, Dashboard, and Data Visualizer. If you didn't already send full
-            instructions when this share was created, you'll need to relay the login and steps to them directly.
+            {i18n.t(
+              "This account can browse the data in DHIS2's own Dashboard and Data Visualizer apps, but confirmed live it can't open Data Share Hub itself from DHIS2's own menu (a platform limitation, not fixable here). It can always reach the login page, Profile, Dashboard, and Data Visualizer. If you didn't already send full instructions when this share was created, you'll need to relay the login and steps to them directly.",
+            )}
           </p>
           {canManage && (
             <Button small onClick={onMarkActive}>
-              I've done this -- mark Active
+              {i18n.t("I've done this -- mark Active")}
             </Button>
           )}
         </NoticeBox>
@@ -136,7 +168,7 @@ export function ShareDetail({
 
       {share.method === 'csv_export' && (
         <p style={{ fontSize: 12, color: '#a0a7ae', margin: 0 }}>
-          This is a log entry of a completed export -- there is no ongoing account to revoke.
+          {i18n.t('This is a log entry of a completed export -- there is no ongoing account to revoke.')}
         </p>
       )}
     </div>

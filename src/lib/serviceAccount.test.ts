@@ -2,12 +2,49 @@ import {
   addUserAccess,
   buildServiceAccountPayload,
   buildUserRolePayload,
+  countOtherActiveSharesForAccount,
   generateServiceUsername,
   generateTempPassword,
+  otherActiveSharesOnSameDataset,
   removeUserAccess,
   type SharingObject,
 } from './serviceAccount'
-import { SHARE_HUB_ROLE_NAME } from '../types/share'
+import { SHARE_HUB_ROLE_NAME, type ShareRecord } from '../types/share'
+
+function makeShare(overrides: Partial<ShareRecord> = {}): ShareRecord {
+  return {
+    id: 's1',
+    label: 'Test share',
+    recipientNote: null,
+    method: 'api_account',
+    slice: {
+      dataSetId: 'ds1',
+      dataSetName: 'Dataset 1',
+      periodType: 'Monthly',
+      dataElementIds: [],
+      dataElementNames: [],
+      orgUnitIds: ['ou1'],
+      orgUnitNames: ['Org unit 1'],
+      startDate: '2025-01-01',
+      endDate: '2025-12-31',
+    },
+    serviceAccountUsername: 'share.test.abc123',
+    serviceAccountUserId: 'account1',
+    userRoleId: 'role1',
+    accountOrigin: 'created',
+    credentialDeliveryMethod: 'temp_password',
+    recipientEmail: null,
+    dashboardId: 'dash1',
+    dashboardUrl: 'https://example.org/dashboard/dash1',
+    visualizationId: 'vis1',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'admin',
+    revokedAt: null,
+    revokedBy: null,
+    ...overrides,
+  }
+}
 
 describe('buildUserRolePayload', () => {
   test('uses the shared role name and grants only Dashboard + Data Visualizer visibility', () => {
@@ -128,5 +165,80 @@ describe('addUserAccess / removeUserAccess', () => {
     const sharing = addUserAccess(existingSharing(), 'newUser')
     const result = removeUserAccess(sharing, 'newUser')
     expect(result.userAccesses).toEqual([{ id: 'existingUser', access: 'rw------' }])
+  })
+})
+
+describe('countOtherActiveSharesForAccount', () => {
+  test('returns 0 when no other share references the account', () => {
+    const shares = [makeShare({ id: 's1', serviceAccountUserId: 'account1' })]
+    expect(countOtherActiveSharesForAccount(shares, 'account1', 's1')).toBe(0)
+  })
+
+  test('counts only api_account shares, ignoring csv_export records on an unrelated field', () => {
+    const shares = [
+      makeShare({ id: 's1', serviceAccountUserId: 'account1' }),
+      makeShare({ id: 's2', method: 'csv_export', serviceAccountUserId: null }),
+    ]
+    expect(countOtherActiveSharesForAccount(shares, 'account1', 's1')).toBe(0)
+  })
+
+  test('excludes the share matching excludeShareId itself', () => {
+    const shares = [
+      makeShare({ id: 's1', serviceAccountUserId: 'account1' }),
+      makeShare({ id: 's2', serviceAccountUserId: 'account1' }),
+    ]
+    expect(countOtherActiveSharesForAccount(shares, 'account1', 's1')).toBe(1)
+    expect(countOtherActiveSharesForAccount(shares, 'account1', 's2')).toBe(1)
+  })
+
+  test('excludes shares with status revoked', () => {
+    const shares = [
+      makeShare({ id: 's1', serviceAccountUserId: 'account1' }),
+      makeShare({ id: 's2', serviceAccountUserId: 'account1', status: 'revoked' }),
+    ]
+    expect(countOtherActiveSharesForAccount(shares, 'account1', 's1')).toBe(0)
+  })
+
+  test('counts draft/account_created/active shares as active', () => {
+    const shares = [
+      makeShare({ id: 's1', serviceAccountUserId: 'account1' }),
+      makeShare({ id: 's2', serviceAccountUserId: 'account1', status: 'draft' }),
+      makeShare({ id: 's3', serviceAccountUserId: 'account1', status: 'account_created' }),
+      makeShare({ id: 's4', serviceAccountUserId: 'account1', status: 'active' }),
+    ]
+    expect(countOtherActiveSharesForAccount(shares, 'account1', 's1')).toBe(3)
+  })
+})
+
+describe('otherActiveSharesOnSameDataset', () => {
+  test('returns empty when the sibling is on the same account but a different dataset', () => {
+    const share = makeShare({ id: 's1', serviceAccountUserId: 'account1', slice: { ...makeShare().slice, dataSetId: 'ds1' } })
+    const sibling = makeShare({ id: 's2', serviceAccountUserId: 'account1', slice: { ...makeShare().slice, dataSetId: 'ds2' } })
+    expect(otherActiveSharesOnSameDataset([share, sibling], share)).toEqual([])
+  })
+
+  test('returns the sibling when same account and same dataset, even with different org units/dates', () => {
+    const share = makeShare({
+      id: 's1',
+      serviceAccountUserId: 'account1',
+      slice: { ...makeShare().slice, dataSetId: 'ds1', orgUnitIds: ['ouA'], startDate: '2025-01-01', endDate: '2025-06-30' },
+    })
+    const sibling = makeShare({
+      id: 's2',
+      serviceAccountUserId: 'account1',
+      slice: { ...makeShare().slice, dataSetId: 'ds1', orgUnitIds: ['ouB'], startDate: '2025-07-01', endDate: '2025-12-31' },
+    })
+    expect(otherActiveSharesOnSameDataset([share, sibling], share)).toEqual([sibling])
+  })
+
+  test('excludes revoked siblings', () => {
+    const share = makeShare({ id: 's1', serviceAccountUserId: 'account1', slice: { ...makeShare().slice, dataSetId: 'ds1' } })
+    const sibling = makeShare({
+      id: 's2',
+      serviceAccountUserId: 'account1',
+      status: 'revoked',
+      slice: { ...makeShare().slice, dataSetId: 'ds1' },
+    })
+    expect(otherActiveSharesOnSameDataset([share, sibling], share)).toEqual([])
   })
 })

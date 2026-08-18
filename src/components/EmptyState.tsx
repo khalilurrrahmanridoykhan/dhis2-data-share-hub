@@ -1,4 +1,5 @@
 import { Button, ButtonStrip } from '@dhis2/ui'
+import i18n from '../locales'
 
 export function EmptyState({
   canManage,
@@ -13,20 +14,21 @@ export function EmptyState({
     <div
       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '64px 24px', textAlign: 'center' }}
     >
-      <h2 style={{ margin: 0 }}>No shares yet</h2>
+      <h2 style={{ margin: 0 }}>{i18n.t('No shares yet')}</h2>
       <p style={{ margin: 0, color: '#6e7a89', maxWidth: 480 }}>
-        A share is one dataset + data elements + org units + a date range, exported either as a CSV file right now, or
-        provisioned as a scoped, revocable external API account. Nothing is bundled -- pick your own data to get started.
+        {i18n.t(
+          'A share is one dataset + data elements + org units + a date range, exported either as a CSV file right now, or provisioned as a scoped, revocable external API account. Nothing is bundled -- pick your own data to get started.',
+        )}
       </p>
       <ButtonStrip>
         <Button primary onClick={onExportCsv}>
-          Export as CSV
+          {i18n.t('Export as CSV')}
         </Button>
-        {canManage && <Button onClick={onCreateApiShare}>Create API share</Button>}
+        {canManage && <Button onClick={onCreateApiShare}>{i18n.t('Create API share')}</Button>}
       </ButtonStrip>
       {!canManage && (
         <p style={{ margin: 0, color: '#6e7a89', fontStyle: 'italic' }}>
-          Ask a user with user-management authority to create an API share.
+          {i18n.t('Ask a user with user-management authority to create an API share.')}
         </p>
       )}
     </div>

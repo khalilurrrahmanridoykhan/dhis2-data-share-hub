@@ -1,7 +1,7 @@
 // Pure payload builders, unit-testable without a live server. The actual
 // HTTP orchestration lives in hooks/useCreateServiceAccount.ts.
 
-import { SHARE_HUB_ROLE_NAME } from '../types/share'
+import { SHARE_HUB_ROLE_NAME, type ShareRecord } from '../types/share'
 
 export interface UserRolePayload {
   name: string
@@ -148,4 +148,34 @@ export function addUserAccess(existing: SharingObject, userId: string, access: s
 // not relied on as the security boundary.)
 export function removeUserAccess(existing: SharingObject, userId: string): SharingObject {
   return { ...existing, userAccesses: (existing.userAccesses ?? []).filter((ua) => ua.id !== userId) }
+}
+
+// How many OTHER active (non-revoked) api_account shares point at this
+// same service account right now -- the live, derived answer to "is this
+// account exclusive to one share." Used both by the existing-account picker
+// (attach flow) and by revoke's account-disable decision. excludeShareId is
+// the share being revoked/created (pass '' when there's no share yet, e.g.
+// from the picker before a new ShareRecord exists).
+export function countOtherActiveSharesForAccount(shares: ShareRecord[], accountUserId: string, excludeShareId: string): number {
+  return shares.filter(
+    (s) => s.id !== excludeShareId && s.method === 'api_account' && s.serviceAccountUserId === accountUserId && s.status !== 'revoked',
+  ).length
+}
+
+// The dataset's userAccesses sharing entry is keyed by (account, dataset)
+// -- one row total, not one per share. If two active shares share both the
+// same account AND the same dataset (different org-unit slice or date
+// range), blindly stripping that account's dataset access on revoke of one
+// would silently break the other. This is the check that prevents that --
+// deliberately narrower than countOtherActiveSharesForAccount (same
+// account isn't enough; must also be the same dataset).
+export function otherActiveSharesOnSameDataset(shares: ShareRecord[], share: ShareRecord): ShareRecord[] {
+  return shares.filter(
+    (s) =>
+      s.id !== share.id &&
+      s.method === 'api_account' &&
+      s.serviceAccountUserId === share.serviceAccountUserId &&
+      s.slice.dataSetId === share.slice.dataSetId &&
+      s.status !== 'revoked',
+  )
 }

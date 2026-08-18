@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useDataSetDetail, type DataSetDetail } from '../hooks/useDataSetDetail'
 import { useDataSets } from '../hooks/useDataSets'
 import { useOrgUnitRoots } from '../hooks/useOrgUnitRoots'
+import i18n from '../locales'
 import { validateDataSlice } from '../lib/dataSlice'
 import type { DataSlice } from '../types/share'
 
@@ -72,14 +73,14 @@ export function SliceForm({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <SimpleSingleSelectField
         name="dataset"
-        label="Dataset"
+        label={i18n.t('Dataset')}
         required
         filterable
-        filterPlaceholder="Search datasets by name..."
+        filterPlaceholder={i18n.t('Search datasets by name...')}
         filterValue={datasetSearchTerm}
         onFilterChange={setDatasetSearchTerm}
         loading={dataSetsLoading}
-        noMatchText="No datasets match this search."
+        noMatchText={i18n.t('No datasets match this search.')}
         options={dataSets.map((ds) => ({ label: `${ds.name} (${ds.periodType})`, value: ds.id }))}
         value={dataSetId ?? ''}
         valueLabel={dataSetName || undefined}
@@ -94,23 +95,23 @@ export function SliceForm({
         <>
           {detail && (
             <div style={{ fontSize: 13, color: '#6e7a89' }}>
-              Period type: <strong>{detail.periodType}</strong>
+              {i18n.t('Period type --')} <strong>{detail.periodType}</strong>
             </div>
           )}
 
           <CheckboxField
-            label="Include all data elements in this dataset"
+            label={i18n.t('Include all data elements in this dataset')}
             checked={allDataElements}
             onChange={({ checked }) => setAllDataElements(checked)}
           />
 
           {!allDataElements && (
             <MultiSelectField
-              label="Data elements to include"
+              label={i18n.t('Data elements to include')}
               loading={detailLoading}
               filterable
-              filterPlaceholder="Filter data elements..."
-              noMatchText="No data elements found."
+              filterPlaceholder={i18n.t('Filter data elements...')}
+              noMatchText={i18n.t('No data elements found.')}
               selected={dataElementIds}
               onChange={({ selected }) => setDataElementIds(selected)}
             >
@@ -121,7 +122,7 @@ export function SliceForm({
           )}
 
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>Org units to include *</div>
+            <div style={{ marginBottom: 4, fontWeight: 500 }}>{i18n.t('Org units to include *')}</div>
             <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #dbe4ea', borderRadius: 4, padding: 8 }}>
               <OrganisationUnitTree
                 roots={orgUnitRoots}
@@ -133,12 +134,17 @@ export function SliceForm({
 
           <div style={{ display: 'flex', gap: 16 }}>
             <InputField
-              label="Start date"
+              label={i18n.t('Start date')}
               type="date"
               value={startDate}
               onChange={({ value }) => setStartDate(value ?? '')}
             />
-            <InputField label="End date" type="date" value={endDate} onChange={({ value }) => setEndDate(value ?? '')} />
+            <InputField
+              label={i18n.t('End date')}
+              type="date"
+              value={endDate}
+              onChange={({ value }) => setEndDate(value ?? '')}
+            />
           </div>
         </>
       )}

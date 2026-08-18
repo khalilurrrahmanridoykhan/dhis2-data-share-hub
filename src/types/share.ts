@@ -39,6 +39,20 @@ export interface DataSlice {
 
 export type CredentialDeliveryMethod = 'invite_email' | 'temp_password'
 
+// Which path THIS share's own creation took -- audit/display metadata
+// only, never used to decide revoke behavior. Whether an account is
+// CURRENTLY exclusive to one share is a live, derived fact (how many other
+// non-revoked shares point at the same serviceAccountUserId right now),
+// not something safe to cache here: this dataStore has no ETag/If-Match
+// (see lib/dataStore.ts), so a cached "exclusive" flag would drift the
+// moment a sibling share is attached or revoked elsewhere. See
+// lib/serviceAccount.ts's countOtherActiveSharesForAccount for the
+// always-fresh version. Optional/nullable and additive -- pre-existing
+// records read back as undefined, treated as 'created' at call sites
+// (every record before this field existed was, by definition, a fresh
+// account creation).
+export type AccountOrigin = 'created' | 'attached'
+
 export interface ShareRecord {
   id: string
   label: string
@@ -50,15 +64,19 @@ export interface ShareRecord {
   serviceAccountUsername: string | null
   serviceAccountUserId: string | null
   userRoleId: string | null
+  accountOrigin: AccountOrigin | null
   credentialDeliveryMethod: CredentialDeliveryMethod | null
   recipientEmail: string | null
 
   // A dedicated, private pivot-table dashboard containing exactly this
   // share's data, shared only with the recipient's service account -- see
   // lib/dashboard.ts. null if dashboard creation failed or wasn't
-  // attempted; the share itself doesn't depend on this succeeding.
+  // attempted; the share itself doesn't depend on this succeeding. Always
+  // 1:1 with this share, even when its account is attached/shared with
+  // other shares -- never reused across shares.
   dashboardId: string | null
   dashboardUrl: string | null
+  visualizationId: string | null
 
   status: ShareStatus
   createdAt: string

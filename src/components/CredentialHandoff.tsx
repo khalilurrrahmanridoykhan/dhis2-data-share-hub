@@ -1,6 +1,7 @@
 import { useConfig } from '@dhis2/app-runtime'
 import { Button, ButtonStrip, Modal, ModalActions, ModalContent, ModalTitle, NoticeBox } from '@dhis2/ui'
 import { useState } from 'react'
+import i18n from '../locales'
 import type { DataSlice } from '../types/share'
 
 // Shows a generated temporary password exactly once. It is never persisted
@@ -40,27 +41,44 @@ export function CredentialHandoff({
     .join('&')}&startDate=${slice.startDate}&endDate=${slice.endDate}`
 
   const fullInstructions = [
-    `You've been given read access to "${slice.dataSetName}" in DHIS2 (org units: ${slice.orgUnitNames.join(', ')}, ${slice.startDate} to ${slice.endDate}).`,
+    i18n.t('You\'ve been given read access to "{{dataSetName}}" in DHIS2 (org units -- {{orgUnits}}, {{startDate}} to {{endDate}}).', {
+      dataSetName: slice.dataSetName,
+      orgUnits: slice.orgUnitNames.join(', '),
+      startDate: slice.startDate,
+      endDate: slice.endDate,
+    }),
     '',
-    `Username: ${username}`,
-    `Temporary password: ${password}`,
+    i18n.t('Username -- {{username}}', { username }),
+    i18n.t('Temporary password -- {{password}}', { password }),
     '',
-    `1. Log in at: ${baseUrl}`,
-    '2. Change your password when prompted.',
-    '3. Click your avatar (top right) -> Profile.',
-    '4. Find "API tokens" and generate a new one.',
-    '5. Use that token in your own tools with an "Authorization: ApiToken <your token>" header -- not this password.',
+    i18n.t('1. Log in at -- {{baseUrl}}', { baseUrl }),
+    i18n.t('2. Change your password when prompted.'),
+    i18n.t('3. Click your avatar (top right) -> Profile.'),
+    i18n.t('4. Find "API tokens" and generate a new one.'),
+    // The header name/value syntax ("Authorization: ApiToken ...") is HTTP
+    // protocol syntax, not prose -- left untranslated (like a code sample)
+    // so the colon inside it never lands inside an i18n.t() key, which
+    // i18next's default extraction otherwise misparses as a namespace
+    // separator (silently dropping the whole string).
+    `${i18n.t('5. Use that token in your own tools with an')} "Authorization: ApiToken <your token>" ${i18n.t(
+      'header -- not this password.',
+    )}`,
     '',
-    'Example request for exactly the data shared with you:',
+    i18n.t('Example request for exactly the data shared with you --'),
     exampleUrl,
     '',
     ...(dashboardUrl
-      ? [`To browse the data visually instead, open your dedicated dashboard (bookmark this): ${dashboardUrl}`, '']
+      ? [
+          i18n.t('To browse the data visually instead, open your dedicated dashboard (bookmark this) -- {{dashboardUrl}}', { dashboardUrl }),
+          '',
+        ]
       : [
-          'To browse the data visually instead: after logging in, open the Dashboard or Data Visualizer app from the DHIS2 menu.',
+          i18n.t('To browse the data visually instead -- after logging in, open the Dashboard or Data Visualizer app from the DHIS2 menu.'),
           '',
         ]),
-    'Note: this account will not show up in the DHIS2 app menu/search for Data Share Hub itself -- that is expected. It only needs the login page, Profile, and the dashboard link above, all of which work.',
+    i18n.t(
+      'Note -- this account will not show up in the DHIS2 app menu/search for Data Share Hub itself -- that is expected. It only needs the login page, Profile, and the dashboard link above, all of which work.',
+    ),
   ].join('\n')
 
   async function handleCopyPassword() {
@@ -75,39 +93,37 @@ export function CredentialHandoff({
 
   return (
     <Modal onClose={onDone} large position="middle">
-      <ModalTitle>Account created -- one manual step left</ModalTitle>
+      <ModalTitle>{i18n.t('Account created -- one manual step left')}</ModalTitle>
       <ModalContent>
-        <NoticeBox warning title="This password is shown once and is not saved anywhere">
-          DHIS2 personal access tokens can only be created by the account itself logging in -- there is no API for
-          creating one on behalf of another user. Share this temporary password with whoever will administer this
-          account, have them log in once, change the password, and generate their own token from Profile → API
-          tokens.
+        <NoticeBox warning title={i18n.t('This password is shown once and is not saved anywhere')}>
+          {i18n.t(
+            'DHIS2 personal access tokens can only be created by the account itself logging in -- there is no API for creating one on behalf of another user. Share this temporary password with whoever will administer this account, have them log in once, change the password, and generate their own token from Profile → API tokens.',
+          )}
         </NoticeBox>
 
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div>
-            <strong>Username:</strong> {username}
+            <strong>{i18n.t('Username --')}</strong> {username}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <strong>Temporary password:</strong>
+            <strong>{i18n.t('Temporary password --')}</strong>
             <code
               style={{ background: '#f0f0f0', padding: '4px 8px', borderRadius: 4, fontSize: 14, letterSpacing: 0.5 }}
             >
               {password}
             </code>
             <Button small onClick={handleCopyPassword}>
-              {copiedPassword ? 'Copied' : 'Copy password'}
+              {copiedPassword ? i18n.t('Copied') : i18n.t('Copy password')}
             </Button>
           </div>
         </div>
 
         <div style={{ marginTop: 16 }}>
           {dashboardUrl ? (
-            <NoticeBox title="A dedicated dashboard was created for this share">
-              This dashboard shows only the data included in this share -- not the general Dashboard app, which
-              would also show every other dashboard already public on this instance. It also includes the
-              token-generation steps directly on the page, so the recipient has them even if this message doesn't
-              reach them. Send the recipient this exact link:
+            <NoticeBox title={i18n.t('A dedicated dashboard was created for this share')}>
+              {i18n.t(
+                "This dashboard shows only the data included in this share -- not the general Dashboard app, which would also show every other dashboard already public on this instance. It also includes the token-generation steps directly on the page, so the recipient has them even if this message doesn't reach them. Send the recipient this exact link --",
+              )}
               <div style={{ marginTop: 8 }}>
                 <code style={{ background: '#f0f0f0', padding: '4px 8px', borderRadius: 4, fontSize: 12, wordBreak: 'break-all' }}>
                   {dashboardUrl}
@@ -115,21 +131,23 @@ export function CredentialHandoff({
               </div>
             </NoticeBox>
           ) : (
-            <NoticeBox warning title="Could not create a dedicated dashboard for this share">
-              The service account and its data access were created successfully, but building a personalized
-              dashboard failed. The recipient can still use the general Dashboard/Data Visualizer apps after logging
-              in, though those will also show other content already public on this instance.
+            <NoticeBox warning title={i18n.t('Could not create a dedicated dashboard for this share')}>
+              {i18n.t(
+                'The service account and its data access were created successfully, but building a personalized dashboard failed. The recipient can still use the general Dashboard/Data Visualizer apps after logging in, though those will also show other content already public on this instance.',
+              )}
             </NoticeBox>
           )}
           <div style={{ marginTop: 8 }}>
-            <Button onClick={handleCopyAll}>{copiedAll ? 'Copied full instructions' : 'Copy full instructions to send'}</Button>
+            <Button onClick={handleCopyAll}>
+              {copiedAll ? i18n.t('Copied full instructions') : i18n.t('Copy full instructions to send')}
+            </Button>
           </div>
         </div>
       </ModalContent>
       <ModalActions>
         <ButtonStrip end>
           <Button primary onClick={onDone}>
-            Done
+            {i18n.t('Done')}
           </Button>
         </ButtonStrip>
       </ModalActions>

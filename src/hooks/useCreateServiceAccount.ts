@@ -15,6 +15,15 @@ import { useShareHubSettings } from './useShareHubSettings'
 
 export type CredentialChoice = { method: 'invite_email'; email: string } | { method: 'temp_password' }
 
+// mode: 'create' mints a brand-new dedicated service account (today's only
+// behavior); mode: 'attach' reuses an already-existing Data Share Hub
+// account (picked from useServiceAccounts) instead, so one real recipient
+// can hold multiple shares under one login. Revoke behavior for each is
+// handled separately -- see useRevokeServiceAccount.ts.
+export type AccountChoice =
+  | { mode: 'create'; credential: CredentialChoice }
+  | { mode: 'attach'; userId: string; username: string }
+
 export interface CreateServiceAccountParams {
   label: string
   orgUnitIds: string[]
@@ -25,16 +34,18 @@ export interface CreateServiceAccountParams {
   // (an empty slice.dataElementIds means "all" for CSV/table display, but a
   // dashboard visualization needs a concrete list either way).
   dataElementIds: string[]
-  credential: CredentialChoice
+  account: AccountChoice
 }
 
 export interface CreateServiceAccountOutcome {
   username: string
   userId: string
   roleId: string
-  tempPassword: string | null // only ever held in memory, never persisted
+  accountOrigin: 'created' | 'attached'
+  tempPassword: string | null // only ever held in memory, never persisted; null when attaching (no new credential is minted)
   dashboardId: string | null
   dashboardUrl: string | null
+  visualizationId: string | null
 }
 
 interface State {
@@ -142,7 +153,7 @@ async function createRecipientDashboard(
   dataElementIds: string[],
   orgUnitIds: string[],
   userId: string,
-): Promise<{ dashboardId: string | null; dashboardUrl: string | null }> {
+): Promise<{ dashboardId: string | null; dashboardUrl: string | null; visualizationId: string | null }> {
   // Caller has already filtered to visualizable value types (see
   // ApiShareForm.tsx) -- if that leaves nothing (e.g. a dataset made
   // entirely of file uploads or text fields), don't attempt to create a
@@ -150,7 +161,7 @@ async function createRecipientDashboard(
   // empty dimension can succeed at creation time and only break when
   // viewed, so this has to be checked up front rather than left to the
   // try/catch below.
-  if (dataElementIds.length === 0) return { dashboardId: null, dashboardUrl: null }
+  if (dataElementIds.length === 0) return { dashboardId: null, dashboardUrl: null, visualizationId: null }
 
   try {
     const visResponse = (await engine.mutate({
@@ -159,7 +170,7 @@ async function createRecipientDashboard(
       data: buildVisualizationPayload(label, dataElementIds, orgUnitIds),
     })) as unknown as CreateResponse
     const visualizationId = visResponse.response?.uid
-    if (!visualizationId) return { dashboardId: null, dashboardUrl: null }
+    if (!visualizationId) return { dashboardId: null, dashboardUrl: null, visualizationId: null }
 
     const dashResponse = (await engine.mutate({
       resource: 'dashboards',
@@ -167,7 +178,7 @@ async function createRecipientDashboard(
       data: buildDashboardPayload(label, visualizationId, baseUrl),
     })) as unknown as CreateResponse
     const dashboardId = dashResponse.response?.uid
-    if (!dashboardId) return { dashboardId: null, dashboardUrl: null }
+    if (!dashboardId) return { dashboardId: null, dashboardUrl: null, visualizationId }
 
     // Confirmed live: a freshly-created dashboard defaults to fully
     // private, but read-then-append here anyway rather than trusting that
@@ -183,10 +194,29 @@ async function createRecipientDashboard(
       data: { object: nextSharing },
     })
 
-    return { dashboardId, dashboardUrl: buildDashboardUrl(baseUrl, dashboardId) }
+    return { dashboardId, dashboardUrl: buildDashboardUrl(baseUrl, dashboardId), visualizationId }
   } catch {
-    return { dashboardId: null, dashboardUrl: null }
+    return { dashboardId: null, dashboardUrl: null, visualizationId: null }
   }
+}
+
+// generateServiceUsername's 6-char random suffix makes a collision
+// astronomically unlikely, not impossible -- this narrows that window
+// rather than eliminating it (a genuine TOCTOU race remains between this
+// check and the POST below, acceptably backstopped by the server's own
+// username-uniqueness constraint). The point is turning a rare raw 409
+// into either a clean retry or a clear error, not a airtight guarantee.
+// Only used on the 'create' path -- 'attach' reuses an already-valid
+// picked username, no collision risk by construction.
+async function reserveUniqueUsername(engine: Engine, label: string, attempts = 5): Promise<string> {
+  for (let i = 0; i < attempts; i++) {
+    const candidate = generateServiceUsername(label)
+    const checkResponse = (await engine.query({
+      existing: { resource: 'users', params: { filter: `username:eq:${candidate}`, fields: 'id', paging: false } },
+    })) as unknown as { existing: { users: { id: string }[] } }
+    if (checkResponse.existing.users.length === 0) return candidate
+  }
+  throw new Error('Could not generate a unique service account username after several attempts -- try a different name.')
 }
 
 // Orchestrates the honest, partially-automated API-sharing flow (README
@@ -206,32 +236,51 @@ export function useCreateServiceAccount() {
     async (params: CreateServiceAccountParams): Promise<CreateServiceAccountOutcome | null> => {
       setState({ creating: true, error: null })
       try {
+        // Needed either way: the dataset/dashboard sharing grants below
+        // target userId regardless of whether it's a fresh account or an
+        // attached existing one.
         const roleId = await findOrCreateRole(engine, minimalRoleId)
         if (roleId !== minimalRoleId) await setMinimalRoleId(roleId)
 
-        const username = generateServiceUsername(params.label)
-        const tempPassword = params.credential.method === 'temp_password' ? generateTempPassword() : null
+        let userId: string
+        let username: string
+        let tempPassword: string | null = null
 
-        const userPayload = buildServiceAccountPayload({
-          username,
-          label: params.label,
-          userRoleId: roleId,
-          orgUnitIds: params.orgUnitIds,
-          credential:
-            params.credential.method === 'invite_email'
-              ? { method: 'invite_email', email: params.credential.email }
-              : { method: 'temp_password', password: tempPassword! },
-        })
+        if (params.account.mode === 'create') {
+          username = await reserveUniqueUsername(engine, params.label)
+          tempPassword = params.account.credential.method === 'temp_password' ? generateTempPassword() : null
 
-        // Verify live: exact required-field list and validation-error shape
-        // vary by instance password policy -- surface any 400 verbatim.
-        const userCreateResponse = (await engine.mutate({
-          resource: 'users',
-          type: 'create',
-          data: userPayload,
-        })) as unknown as CreateResponse
-        const userId = userCreateResponse.response?.uid
-        if (!userId) throw new Error('Could not determine the created service account id from the server response.')
+          const userPayload = buildServiceAccountPayload({
+            username,
+            label: params.label,
+            userRoleId: roleId,
+            orgUnitIds: params.orgUnitIds,
+            credential:
+              params.account.credential.method === 'invite_email'
+                ? { method: 'invite_email', email: params.account.credential.email }
+                : { method: 'temp_password', password: tempPassword! },
+          })
+
+          // Verify live: exact required-field list and validation-error
+          // shape vary by instance password policy -- surface any 400
+          // verbatim.
+          const userCreateResponse = (await engine.mutate({
+            resource: 'users',
+            type: 'create',
+            data: userPayload,
+          })) as unknown as CreateResponse
+          const createdUserId = userCreateResponse.response?.uid
+          if (!createdUserId) throw new Error('Could not determine the created service account id from the server response.')
+          userId = createdUserId
+        } else {
+          // Attach path: no POST /api/users at all -- reuse the picked
+          // account as-is. If it already has a userAccesses entry on this
+          // exact dataset from an earlier share, addUserAccess below
+          // replaces-by-id rather than duplicating, so re-adding is a
+          // harmless no-op PUT.
+          userId = params.account.userId
+          username = params.account.username
+        }
 
         // Read-then-append: never blind-overwrite the dataset's existing
         // sharing settings.
@@ -248,7 +297,10 @@ export function useCreateServiceAccount() {
           data: { object: nextSharing },
         })
 
-        const { dashboardId, dashboardUrl } = await createRecipientDashboard(
+        // A dashboard is always created fresh per share, even when
+        // attaching -- it's always exclusively this share's data, never
+        // shared across shares even ones on the same account.
+        const { dashboardId, dashboardUrl, visualizationId } = await createRecipientDashboard(
           engine,
           baseUrl,
           params.label,
@@ -258,7 +310,16 @@ export function useCreateServiceAccount() {
         )
 
         setState({ creating: false, error: null })
-        return { username, userId, roleId, tempPassword, dashboardId, dashboardUrl }
+        return {
+          username,
+          userId,
+          roleId,
+          accountOrigin: params.account.mode === 'create' ? 'created' : 'attached',
+          tempPassword,
+          dashboardId,
+          dashboardUrl,
+          visualizationId,
+        }
       } catch (error) {
         setState({ creating: false, error: error instanceof Error ? error.message : String(error) })
         return null

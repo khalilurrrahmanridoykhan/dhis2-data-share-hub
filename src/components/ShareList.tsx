@@ -1,4 +1,5 @@
 import { Button, ButtonStrip, Menu, MenuItem } from '@dhis2/ui'
+import i18n from '../locales'
 import type { ShareRecord } from '../types/share'
 import { ShareStatusTag } from './StatusTag'
 
@@ -26,11 +27,11 @@ export function ShareList({
       <div style={{ padding: 12 }}>
         <ButtonStrip>
           <Button small primary onClick={onExportCsv}>
-            Export as CSV
+            {i18n.t('Export as CSV')}
           </Button>
           {canManage && (
             <Button small onClick={onCreateApiShare}>
-              API share
+              {i18n.t('API share')}
             </Button>
           )}
         </ButtonStrip>
